@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+enum Role {
+  STUDENT
+  STAFF
+}
+enum RequestType {
+  STUDY
+  MILITARY
+  APPOINTMENT
+}
+enum RequestStatus {
+  PROCESSING
+  READY
+}
+enum LessonType {
+  LECTURE
+  PRACTICE
+}
+model User {
+  id           String       @id @default(cuid())
+  login        String       @unique
+  name         String
+  passwordHash String
+  role         Role         @default(STUDENT)
+  lessons      Lesson[]
+  grades       Grade[]
+  deadlines    Deadline[]
+  requests     ServiceRequest[]
+}
+model Lesson {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  teacher   String
+  room      String
+  type      LessonType
+  startsAt  DateTime
+  endsAt    DateTime
+  @@index([userId, startsAt])
+}
+model Grade {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  score     Int
+  threshold Int
+  term      Int
+  @@unique([userId, title, term])
+}
+model Deadline {
+  id     String   @id @default(cuid())
+  userId String
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title  String
+  course String
+  dueAt  DateTime
+  @@index([userId, dueAt])
+}
+model ServiceRequest {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      RequestType
+  status    RequestStatus @default(PROCESSING)
+  createdAt DateTime      @default(now())
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+model News {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+}
+model LoginChallenge {
+  id        String   @id
+  userId    String
+  passwordHash String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  @@index([expiresAt])
+}
