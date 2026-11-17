@@ -2,6 +2,15 @@
 
 Мобильный конкурсный прототип на Next.js App Router, React, TypeScript, Tailwind CSS и компонентах по модели shadcn/ui. Личный кабинет использует Auth.js, Prisma и PostgreSQL.
 
+## Скриншоты
+
+Демоверсия `/demo/today` — личный кабинет на десктопе и в мобильном браузере:
+
+<p align="center">
+  <img src="docs/desktop.png" alt="Личный кабинет, десктоп" width="720" />
+  <img src="docs/mobile.png" alt="Личный кабинет, мобильный браузер" width="240" />
+</p>
+
 ## Запуск демоверсии
 
 Требуется Node.js 20.9+.
