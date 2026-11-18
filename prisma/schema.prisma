@@ -1,23 +1,30 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
 enum Role {
   STUDENT
   STAFF
 }
+
 enum RequestType {
   STUDY
   MILITARY
   APPOINTMENT
 }
+
 enum RequestStatus {
+  NEW
   PROCESSING
   READY
+  REJECTED
 }
+
 enum LessonType {
   LECTURE
   PRACTICE
@@ -26,45 +33,35 @@ enum LessonType {
   TEST
   EXAM
 }
+
 enum AttendanceStatus {
   PRESENT
   ABSENT
   EXCUSED
 }
+
 enum Funding {
   BUDGET
   CONTRACT
 }
+
 model User {
-  id           String       @id @default(cuid())
-  login        String       @unique
-  name         String
-  passwordHash String
-  role         Role         @default(STUDENT)
-  lessons      Lesson[]
-  grades       Grade[]
-  deadlines    Deadline[]
-  requests     ServiceRequest[]
-  profile      StudentProfile?
-  attendances  Attendance[]
+  id             String           @id @default(cuid())
+  login          String           @unique
+  name           String
+  passwordHash   String
+  role           Role             @default(STUDENT)
+  studentProfile StudentProfile?
+  staffProfile   StaffProfile?
+  notifications  Notification[]
+  audits         AuditEntry[]
+  lessons        Lesson[]
+  grades         Grade[]
+  deadlines      Deadline[]
+  requests       ServiceRequest[]
+  attendances    Attendance[]
 }
-model StudentProfile {
-  userId       String    @id
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  birthDate    DateTime?
-  studentId    String?   @unique
-  institute    String?
-  faculty      String?
-  department   String?
-  programCode  String?
-  programName  String?
-  course       Int?
-  groupName    String?
-  funding      Funding?
-  phone        String?
-  contactEmail String?
-  messengerUrl String?
-}
+
 model Lesson {
   id               String       @id @default(cuid())
   userId           String
@@ -81,8 +78,10 @@ model Lesson {
   startsAt         DateTime
   endsAt           DateTime
   attendances      Attendance[]
+
   @@index([userId, startsAt])
 }
+
 model Attendance {
   id       String           @id @default(cuid())
   lessonId String
@@ -90,9 +89,11 @@ model Attendance {
   status   AttendanceStatus
   lesson   Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@unique([lessonId, userId])
   @@index([userId])
 }
+
 model Grade {
   id        String @id @default(cuid())
   userId    String
@@ -101,8 +102,10 @@ model Grade {
   score     Int
   threshold Int
   term      Int
+
   @@unique([userId, title, term])
 }
+
 model Deadline {
   id          String    @id @default(cuid())
   userId      String
@@ -112,33 +115,115 @@ model Deadline {
   dueAt       DateTime
   lessonId    String?
   completedAt DateTime?
+
   @@index([userId, dueAt])
 }
+
 model ServiceRequest {
   id        String        @id @default(cuid())
   userId    String
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      RequestType
-  status    RequestStatus @default(PROCESSING)
+  status    RequestStatus @default(NEW)
   number    String?       @unique
   comment   String?
+  readyBy   DateTime?
+  revision  Int           @default(0)
   createdAt DateTime      @default(now())
   updatedAt DateTime?     @updatedAt
+
   @@index([userId, createdAt])
   @@index([createdAt])
 }
+
 model News {
   id        String   @id @default(cuid())
   title     String
   body      String
   createdAt DateTime @default(now())
 }
+
 model LoginChallenge {
-  id        String   @id
-  userId    String
+  id           String   @id
+  userId       String
   passwordHash String
-  codeHash  String
-  expiresAt DateTime
-  attempts  Int      @default(0)
+  codeHash     String
+  expiresAt    DateTime
+  attempts     Int      @default(0)
+
   @@index([expiresAt])
+}
+
+model StudyGroup {
+  id       String           @id @default(cuid())
+  name     String           @unique
+  faculty  String
+  course   Int
+  students StudentProfile[]
+  staff    StaffProfile[]   @relation("ScopedGroups")
+  lessons  GroupLesson[]
+}
+
+model GroupLesson {
+  groupId  String
+  group    StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id       String     @id @default(cuid())
+  title    String
+  teacher  String
+  room     String
+  type     LessonType
+  startsAt DateTime
+  endsAt   DateTime
+
+  @@index([groupId, startsAt])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model AuditEntry {
+  groupId   String?
+  id        String   @id @default(cuid())
+  actorId   String
+  actor     User     @relation(fields: [actorId], references: [id])
+  summary   String
+  createdAt DateTime @default(now())
+
+  @@index([groupId, createdAt])
+}
+
+model StudentProfile {
+  userId       String      @id
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId      String?
+  group        StudyGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  birthDate    DateTime?
+  studentId    String?     @unique
+  institute    String?
+  faculty      String?
+  department   String?
+  programCode  String?
+  programName  String?
+  course       Int?
+  groupName    String?
+  funding      Funding?
+  phone        String?
+  contactEmail String?
+  messengerUrl String?
+
+  @@index([groupId])
+}
+
+model StaffProfile {
+  userId String       @id
+  user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groups StudyGroup[] @relation("ScopedGroups")
 }

@@ -4,7 +4,7 @@ import { compare, hash } from "bcryptjs";
 import { cookies } from "next/headers";
 import { AuthError } from "next-auth";
 import { revalidatePath } from "next/cache";
-import { RequestType, RequestStatus } from "@prisma/client";
+import { RequestType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { signIn, signOut } from "@/auth";
 import { account } from "@/lib/access";
@@ -19,7 +19,7 @@ export async function startLogin(form: FormData) {
     const user = await db.user.findUnique({ where: { login: login.trim().toLowerCase() } });
     const dummy = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxcdI6XG2nRf3TRMQ9RnsUq2mEu";
     const valid = await compare(password, user?.passwordHash ?? dummy);
-    if (!user || !valid) return { error: "Проверьте логин и пароль." };
+    if (!user || !valid || user.role !== (form.get("entry") === "staff" ? "STAFF" : "STUDENT")) return { error: "Проверьте логин и пароль." };
 
     const jar = await cookies();
     const previous = jar.get("dekanat-challenge")?.value;
@@ -50,11 +50,11 @@ export async function finishLogin(form: FormData) {
     const url = await signIn("credentials", {
       challenge: jar.get("dekanat-challenge")?.value ?? "",
       code: form.get("code"),
-      redirectTo: "/cabinet/today", redirect: false,
+      redirectTo: "/account", redirect: false,
     });
     if (typeof url !== "string" || url.includes("error=")) return { error: "Код неверен или истёк." };
     jar.delete("dekanat-challenge");
-    return { url: "/cabinet/today" };
+    return { url: "/account" };
   } catch (error) {
     if (error instanceof AuthError) return { error: "Код неверен или истёк. Проверьте код либо начните заново." };
     throw error;
@@ -66,20 +66,9 @@ export async function logout() {
 }
 
 export async function apply(type: RequestType) {
-  const user = await account();
-  if (user.role !== "STUDENT" || !Object.values(RequestType).includes(type)) return { error: "Заявка недоступна." };
-  await db.serviceRequest.create({ data: { userId: user.id, type } });
-  revalidatePath("/cabinet/services");
-  return {};
-}
-
-export async function changeStatus(id: string, status: RequestStatus) {
-  const user = await account();
-  if (user.role !== "STAFF" || typeof id !== "string" || !Object.values(RequestStatus).includes(status)) {
-    return { error: "Изменение статуса недоступно." };
-  }
-  const updated = await db.serviceRequest.updateMany({ where: { id }, data: { status } });
-  if (!updated.count) return { error: "Заявка не найдена." };
+  const user = await account("STUDENT");
+  if (!Object.values(RequestType).includes(type)) return { error: "Заявка недоступна." };
+  await db.serviceRequest.create({ data: { userId: user.id, type, number: "З-" + new Date().getFullYear() + "-" + String(randomInt(0, 100000)).padStart(5, "0") } });
   revalidatePath("/cabinet/services");
   revalidatePath("/staff");
   return {};

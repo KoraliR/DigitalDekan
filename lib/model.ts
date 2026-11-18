@@ -4,9 +4,9 @@ export const services: Record<RequestType, string> = {
   MILITARY: "Справка для военкомата",
   APPOINTMENT: "Вызов в деканат",
 };
-export const statuses: Record<RequestStatus, string> = { PROCESSING: "В обработке", READY: "Готово" };
+export const statuses: Record<RequestStatus, string> = { NEW: "Новая", PROCESSING: "В работе", READY: "Готово", REJECTED: "Отклонена" };
 export const requestTypeClass: Record<RequestType, string> = { STUDY: "info", MILITARY: "info", APPOINTMENT: "warn" };
-export const requestStatusClass: Record<RequestStatus, string> = { PROCESSING: "active", READY: "done" };
+export const requestStatusClass: Record<RequestStatus, string> = { NEW: "info", PROCESSING: "warn", READY: "done", REJECTED: "absent" };
 export interface RequestView {
   id: string;
   number: string;
@@ -15,6 +15,7 @@ export interface RequestView {
   createdAt: string;
   updatedAt: string;
   comment: string | null;
+  readyBy: string | null;
   student?: string;
 }
 export const lessonTypes: Record<LessonType, { label: string; className: string }> = {

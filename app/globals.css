@@ -255,6 +255,8 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
   .meter-fill { transition: none; }
 }
 
+.pill.info { background: var(--info); color: var(--info-ink); }
+.pill.warn { background: var(--warn); color: var(--warn-ink); }
 .pill.seminar { background: var(--info); color: var(--info-ink); }
 .pill.lab { background: var(--warn); color: var(--warn-ink); }
 .pill.test { background: var(--soft); color: var(--muted); }
@@ -302,3 +304,25 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
 }
 @keyframes lesson-up { from { transform: translateY(48px); opacity: .8; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .sheet-panel { animation: none; } }
+.staff-workspace { display: grid; gap: 14px; max-width: 1100px; }
+.staff-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.staff-nav a { padding: 8px 12px; border-radius: 10px; font-weight: 800; }
+.staff-nav a[aria-current="page"] { background: var(--tint); color: var(--accent-ink); }
+.staff-metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.staff-metrics a { display: grid; }
+.staff-metrics strong { font-size: 27px; color: var(--accent-ink); }
+.staff-row { border-top: 1px solid var(--line); padding: 11px 0; overflow-wrap: anywhere; }
+.staff-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,175px),1fr)); gap: 10px; align-items: end; margin: 12px 0; }
+.staff-fields label { display: grid; gap: 4px; min-width: 0; font-weight: 700; }
+.staff-fields input, .staff-fields select, .staff-fields textarea { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.staff-fields textarea { min-height: 75px; }
+.staff-wide, .request-note { grid-column: 1 / -1; }
+.request-note { flex-basis: 100%; }
+.message-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.staff-workspace > header { flex-wrap: wrap; }
+.staff-nav a { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 719px) {
+  .staff-workspace { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+  .staff-nav { position: fixed; inset: auto 0 0; z-index: 3; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 4px 3px calc(4px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+  .staff-nav a { flex-direction: column; justify-content: center; min-height: 50px; padding: 4px 0; gap: 3px; font-size: 10px; }
+}

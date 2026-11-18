@@ -40,9 +40,9 @@ export function fundingLabel(funding: Funding | null) {
 }
 
 export async function profileFor(userId: string): Promise<ProfileDTO | null> {
-  const user = await db.user.findUnique({ where: { id: userId }, include: { profile: true } });
+  const user = await db.user.findUnique({ where: { id: userId }, include: { studentProfile: true } });
   if (!user) return null;
-  const profile = user.profile;
+  const profile = user.studentProfile;
   return {
     id: user.id,
     name: user.name,

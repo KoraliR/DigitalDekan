@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { Download, X } from "lucide-react";
 import { dateLabel, timeLabel, requestTypeClass, requestStatusClass, services, statuses, type RequestView } from "@/lib/model";
 import { Sheet } from "@/components/ui/sheet";
@@ -46,9 +47,12 @@ export function RequestDialog({ request, onClose }: { request: RequestView; onCl
         <div className="request-fact"><dt>Номер заявки</dt><dd>{request.number}</dd></div>
         <div className="request-fact"><dt>Дата подачи</dt><dd>{dateLabel(new Date(request.createdAt))} · {timeLabel(new Date(request.createdAt))}</dd></div>
         <div className="request-fact"><dt>Последнее изменение</dt><dd>{dateLabel(new Date(request.updatedAt))} · {timeLabel(new Date(request.updatedAt))}</dd></div>
+        {request.readyBy && <div className="request-fact"><dt>Срок готовности</dt><dd>{dateLabel(new Date(request.readyBy))}</dd></div>}
         <div className="request-fact"><dt>Статус</dt><dd><span className={"pill " + requestStatusClass[request.status]}>{statuses[request.status]}</span></dd></div>
         <div className="request-fact"><dt>Комментарий</dt><dd>{request.comment || "Комментария пока нет"}</dd></div>
       </dl>
+
+      <Link className="text-link" href={"/cabinet/requests/" + request.id}>Открыть страницу заявки</Link>
 
       {isDocument && ready && <div className="sheet-actions">
         <button type="button" className="button button-primary" onClick={download} disabled={downloading}>
