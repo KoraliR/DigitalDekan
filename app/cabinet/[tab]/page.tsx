@@ -15,7 +15,7 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
     tab === "grades" ? db.grade.findMany({ where: { userId: user.id }, orderBy: { term: "desc" } }) : [],
     tab === "today" || tab === "calendar" ? db.deadline.findMany({ where: { userId: user.id }, orderBy: { dueAt: "asc" } }) : [],
     tab === "services" ? db.serviceRequest.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }) : [],
-    tab === "calendar" ? db.news.findMany({ orderBy: { createdAt: "desc" } }) : [],
+    tab === "today" ? db.news.findMany({ orderBy: { createdAt: "desc" } }) : [],
   ]);
   return <Dashboard initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} data={{
     lessons: lessons.map(({ userId, ...lesson }) => ({ ...lesson, startsAt: lesson.startsAt.toISOString(), endsAt: lesson.endsAt.toISOString() })),

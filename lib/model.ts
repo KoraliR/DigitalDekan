@@ -18,6 +18,13 @@ export function dateLabel(date: Date, weekday = false) {
 export function plusDays(day: string, count: number) {
   return new Date(Date.parse(day + "T12:00:00+03:00") + count * 86400000);
 }
+export function weekStart(day: string) {
+  const weekday = (plusDays(day, 0).getUTCDay() + 6) % 7;
+  return plusDays(day, -weekday);
+}
+export function weeksBetween(from: string, to: string) {
+  return Math.round((+weekStart(to) - +weekStart(from)) / 604800000);
+}
 export interface DashboardData {
   lessons: { id: string; title: string; teacher: string; room: string; type: "LECTURE" | "PRACTICE"; startsAt: string; endsAt: string }[];
   grades: { id: string; title: string; score: number; threshold: number; term: number }[];

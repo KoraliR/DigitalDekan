@@ -3,16 +3,16 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, ChevronLeft, ChevronRight,
-  CircleHelp, Clock3, Coffee, FileText, GraduationCap, Info, LogOut, Map, MapPin, Menu,
+  CircleHelp, Clock3, Coffee, FileText, GraduationCap, Info, LogOut, Map, MapPin, Megaphone, Menu,
   Route, Shield, UserRound, X, type LucideIcon,
 } from "lucide-react";
 import { apply, changeStatus, logout } from "@/app/actions";
-import { campusDay, dateLabel, plusDays, services, statuses, timeLabel, type DashboardData } from "@/lib/model";
+import { campusDay, dateLabel, plusDays, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
 import type { Tab } from "@/lib/tabs";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme";
 import { Campus } from "./campus";
-import { DeadlineCalendar } from "./calendar";
+import { DeadlineCalendar, WeekPicker } from "./calendar";
 import type { RequestType } from "@prisma/client";
 
 const navigation: { id: Tab; title: string; icon: LucideIcon }[] = [
@@ -28,12 +28,16 @@ function Empty({ children }: { children: React.ReactNode }) {
 }
 
 const lessonForms: Record<string, string> = { one: "занятие", few: "занятия", many: "занятий" };
+function countLabel(count: number, forms: [string, string, string]) {
+  const rule = new Intl.PluralRules("ru").select(count);
+  return count + " " + forms[rule === "one" ? 0 : rule === "few" ? 1 : 2];
+}
 
 function Schedule({ day, lessons, mapUrl }: { day: string; lessons: DashboardData["lessons"]; mapUrl: string }) {
   const [weekly, setWeekly] = useState(false);
   const [offset, setOffset] = useState(0);
-  const weekday = (plusDays(day, 0).getUTCDay() + 6) % 7;
-  const days = weekly ? Array.from({ length: 7 }, (_, index) => plusDays(day, offset * 7 + index - weekday)) : [plusDays(day, 0)];
+  const monday = campusDay(weekStart(day));
+  const days = weekly ? Array.from({ length: 7 }, (_, index) => plusDays(monday, offset * 7 + index)) : [plusDays(day, 0)];
   const selected = lessons.filter((lesson) => campusDay(new Date(lesson.startsAt)) === day);
   return <section className="panel schedule">
     <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><CalendarDays size={21} /></span><div><h2>Расписание</h2><p className="muted">{weekly ? "Занятия по дням недели" : selected.length + " " + lessonForms[new Intl.PluralRules("ru").select(selected.length)] + " сегодня"}</p></div></div>
@@ -43,7 +47,7 @@ function Schedule({ day, lessons, mapUrl }: { day: string; lessons: DashboardDat
       </div>
     </div>
     {weekly && <div className="week-controls"><Button variant="icon" aria-label="Предыдущая неделя" onClick={() => setOffset(offset - 1)}><ChevronLeft size={18} /></Button>
-      <span>{dateLabel(days[0])} — {dateLabel(days[6])}</span>
+      <WeekPicker week={plusDays(monday, offset * 7)} today={day} onPick={(date) => setOffset(weeksBetween(day, campusDay(date)))} />
       <Button variant="icon" aria-label="Следующая неделя" onClick={() => setOffset(offset + 1)}><ChevronRight size={18} /></Button></div>}
     {days.map((date) => {
       const rows = lessons.filter((item) => campusDay(new Date(item.startsAt)) === campusDay(date));
@@ -85,13 +89,24 @@ function Deadlines({ items, day, href }: { items: DashboardData["deadlines"]; da
   </section>;
 }
 
+function News({ items }: { items: DashboardData["news"] }) {
+  return <section className="panel news">
+    <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><Megaphone size={20} /></span><div><h2>Новости деканата</h2><p className="muted">Объявления учебного офиса</p></div></div></div>
+    {items.length ? <div className="news-list">{items.map((item) => <article key={item.id}><h3>{item.title}</h3><p className="muted">{item.body}</p></article>)}</div> : <Empty>Новостей пока нет</Empty>}
+  </section>;
+}
+
 function Grades({ grades }: { grades: DashboardData["grades"] }) {
-  const [all, setAll] = useState(false);
-  const term = Math.max(...grades.map((grade) => grade.term));
-  const rows = all ? grades : grades.filter((grade) => grade.term === term);
+  const terms = [...new Set(grades.map((grade) => grade.term))].sort((left, right) => right - left);
+  const [view, setView] = useState(() => (terms.length ? String(terms[0]) : "all"));
+  const all = view === "all";
+  const rows = all ? grades : grades.filter((grade) => String(grade.term) === view);
   return <section className="panel">
-    <div className="section-head"><div><h2>Дисциплины</h2><p className="muted">{grades.length ? "Семестр " + term : "Баллы по дисциплинам"}</p></div>
-      <div className="segmented"><button aria-pressed={!all} onClick={() => setAll(false)}>Семестр</button><button aria-pressed={all} onClick={() => setAll(true)}>Вся учёба</button></div></div>
+    <div className="section-head"><div><h2>Дисциплины</h2><p className="muted">{grades.length ? (all ? "Все семестры" : "Семестр " + view) + " · " + countLabel(rows.length, ["дисциплина", "дисциплины", "дисциплин"]) : "Баллы по дисциплинам"}</p></div>
+      <select className="select-control" aria-label="Семестр" value={view} onChange={(event) => setView(event.target.value)} disabled={!grades.length}>
+        {terms.map((value) => <option key={value} value={String(value)}>Семестр {value}</option>)}
+        <option value="all">Вся учёба</option>
+      </select></div>
     {rows.length === 0 && <Empty>Оценок пока нет</Empty>}
     {rows.map((grade) => {
       const left = Math.max(0, grade.threshold - grade.score);
@@ -194,20 +209,20 @@ export function Dashboard({ tab, day, data, role, name, demo = false, initialRoo
         <div className="banner-content"><p><CalendarDays size={16} /> <span className="banner-date">{dateLabel(plusDays(day, 0), true)}</span></p><h1>Сегодня</h1><div>Расписание занятий и ближайшие дедлайны</div></div>
         <div className="banner-art" aria-hidden="true"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbit orbit-three" /><div className="banner-icon"><CalendarDays size={68} strokeWidth={1.3} /></div><span className="art-arrow"><ArrowUpRight size={22} /></span></div>
       </section> : <div className="page-heading"><h1>{title}</h1></div>}
-      {tab === "today" && <div className="dashboard-grid">
-        <Schedule lessons={data.lessons} day={day} mapUrl={base + "map"} />
-        <div className="content-stack"><Deadlines items={data.deadlines} day={day} href={base + "calendar"} />
-          <Link className="panel route-link" href={base + "map"}><span className="soft-icon"><Route size={22} /></span><div><h2>Найти аудиторию</h2><p className="muted">Маршрут по кампусу</p></div><ArrowDownRight size={19} /></Link>
+      {tab === "today" && <div className="content-stack">
+        <div className="dashboard-grid">
+          <Schedule lessons={data.lessons} day={day} mapUrl={base + "map"} />
+          <div className="content-stack"><Deadlines items={data.deadlines} day={day} href={base + "calendar"} />
+            <Link className="panel route-link" href={base + "map"}><span className="soft-icon"><Route size={22} /></span><div><h2>Найти аудиторию</h2><p className="muted">Маршрут по кампусу</p></div><ArrowDownRight size={19} /></Link>
+          </div>
         </div>
+        <News items={data.news} />
       </div>}
       {tab === "grades" && <Grades grades={data.grades} />}
       {tab === "services" && <Services role={role} requests={data.requests} demo={demo} />}
       {tab === "map" && <Campus key={initialRoom ?? "campus"} lessons={data.lessons} initialRoom={initialRoom} />}
       {tab === "calendar" && <div className="content-stack">
         <div className="dashboard-grid campus-grid"><DeadlineCalendar day={day} items={data.deadlines} selected={selectedDay} onSelect={setSelectedDay} /><Deadlines items={selectedDay ? data.deadlines.filter((item) => campusDay(new Date(item.dueAt)) === selectedDay) : data.deadlines} day={day} /></div>
-        <details className="panel news"><summary>Новости деканата</summary>
-          {data.news.length ? data.news.map((item) => <article key={item.id}><h3>{item.title}</h3><p className="muted">{item.body}</p></article>) : <Empty>Новостей пока нет</Empty>}
-        </details>
       </div>}
     </main></div>
     {nav("bottom-nav")}
