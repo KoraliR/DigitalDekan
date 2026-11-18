@@ -1,15 +1,16 @@
 "use client";
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, Eye, EyeOff, GraduationCap, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, GraduationCap, ShieldCheck } from "lucide-react";
 import { finishLogin, startLogin } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme";
+import { Field } from "@/components/ui/field";
+import { PasswordField } from "@/components/ui/password-field";
 
 export function Login({ enabled }: { enabled: boolean }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
-  const [visible, setVisible] = useState(false);
   const [pending, run] = useTransition();
 
   function submit(form: FormData) {
@@ -37,12 +38,14 @@ export function Login({ enabled }: { enabled: boolean }) {
       {enabled && <form action={submit} className="login-form" key={code ? "code" : "password"}>
         {code ? <>
           <div className="notice">Код для демонстрации <strong>{code}</strong></div>
-          <label>Код подтверждения<input className="otp" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required /></label>
+          <Field label="Код подтверждения" htmlFor="login-code">
+            <input id="login-code" className="otp" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required />
+          </Field>
         </> : <>
-          <label>Логин<input name="login" autoComplete="username" maxLength={80} required /></label>
-          <label>Пароль<span className="password-field"><input name="password" type={visible ? "text" : "password"} autoComplete="current-password" required />
-            <Button variant="icon" type="button" onClick={() => setVisible(!visible)} aria-label={visible ? "Скрыть пароль" : "Показать пароль"}>{visible ? <EyeOff size={18} /> : <Eye size={18} />}</Button>
-          </span></label>
+          <Field label="Логин" htmlFor="login"><input id="login" name="login" autoComplete="username" maxLength={80} required /></Field>
+          <Field label="Пароль" htmlFor="login-password">
+            <PasswordField id="login-password" name="password" autoComplete="current-password" required />
+          </Field>
         </>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <Button disabled={pending}>{pending ? "Проверяем…" : code ? "Подтвердить" : "Войти"}<ArrowRight size={17} /></Button>

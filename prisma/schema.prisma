@@ -21,6 +21,19 @@ enum RequestStatus {
 enum LessonType {
   LECTURE
   PRACTICE
+  SEMINAR
+  LAB
+  TEST
+  EXAM
+}
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  EXCUSED
+}
+enum Funding {
+  BUDGET
+  CONTRACT
 }
 model User {
   id           String       @id @default(cuid())
@@ -32,18 +45,53 @@ model User {
   grades       Grade[]
   deadlines    Deadline[]
   requests     ServiceRequest[]
+  profile      StudentProfile?
+  attendances  Attendance[]
+}
+model StudentProfile {
+  userId       String    @id
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  birthDate    DateTime?
+  studentId    String?   @unique
+  institute    String?
+  faculty      String?
+  department   String?
+  programCode  String?
+  programName  String?
+  course       Int?
+  groupName    String?
+  funding      Funding?
+  phone        String?
+  contactEmail String?
+  messengerUrl String?
 }
 model Lesson {
-  id        String     @id @default(cuid())
-  userId    String
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  teacher   String
-  room      String
-  type      LessonType
-  startsAt  DateTime
-  endsAt    DateTime
+  id               String       @id @default(cuid())
+  userId           String
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  teacher          String
+  room             String
+  type             LessonType
+  groups           String[]     @default([])
+  campus           String?
+  teachers         Json?
+  originalStartsAt DateTime?
+  originalEndsAt   DateTime?
+  startsAt         DateTime
+  endsAt           DateTime
+  attendances      Attendance[]
   @@index([userId, startsAt])
+}
+model Attendance {
+  id       String           @id @default(cuid())
+  lessonId String
+  userId   String
+  status   AttendanceStatus
+  lesson   Lesson           @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([lessonId, userId])
+  @@index([userId])
 }
 model Grade {
   id        String @id @default(cuid())
@@ -56,12 +104,14 @@ model Grade {
   @@unique([userId, title, term])
 }
 model Deadline {
-  id     String   @id @default(cuid())
-  userId String
-  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title  String
-  course String
-  dueAt  DateTime
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  course      String
+  dueAt       DateTime
+  lessonId    String?
+  completedAt DateTime?
   @@index([userId, dueAt])
 }
 model ServiceRequest {
@@ -70,7 +120,10 @@ model ServiceRequest {
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      RequestType
   status    RequestStatus @default(PROCESSING)
+  number    String?       @unique
+  comment   String?
   createdAt DateTime      @default(now())
+  updatedAt DateTime?     @updatedAt
   @@index([userId, createdAt])
   @@index([createdAt])
 }

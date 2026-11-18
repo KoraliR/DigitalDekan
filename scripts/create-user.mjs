@@ -2,6 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
+import { passwordError } from "../lib/password.mjs";
 
 const [role, login, ...name] = process.argv.slice(2);
 if (!["STUDENT", "STAFF"].includes(role) || !login || login.length > 80 || !name.length) {
@@ -15,7 +16,8 @@ process.stdout.write("Пароль (ввод скрыт): ");
 const password = await prompt.question("");
 prompt.close();
 process.stdout.write("\n");
-if (password.length < 10 || Buffer.byteLength(password) > 72) throw new Error("Пароль: минимум 10 символов, максимум 72 байта.");
+const issue = passwordError(password);
+if (issue) throw new Error(issue);
 const db = new PrismaClient();
 try {
   await db.user.create({ data: {

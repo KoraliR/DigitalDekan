@@ -1,18 +1,22 @@
 "use client";
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, ChevronLeft, ChevronRight,
   CircleHelp, Clock3, Coffee, FileText, GraduationCap, Info, LogOut, Map, MapPin, Megaphone, Menu,
   Route, Shield, UserRound, X, type LucideIcon,
 } from "lucide-react";
 import { apply, changeStatus, logout } from "@/app/actions";
-import { campusDay, dateLabel, plusDays, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
+import { campusDay, dateLabel, plusDays, requestStatusClass, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
 import type { Tab } from "@/lib/tabs";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme";
 import { Campus } from "./campus";
 import { DeadlineCalendar, WeekPicker } from "./calendar";
+import { ProfileView } from "./profile";
+import { LessonTypeBadge } from "./lesson-meta";
+import { LessonDialog } from "./lesson-dialog";
+import { RequestDialog } from "./request-dialog";
 import type { RequestType } from "@prisma/client";
 
 const navigation: { id: Tab; title: string; icon: LucideIcon }[] = [
@@ -21,6 +25,7 @@ const navigation: { id: Tab; title: string; icon: LucideIcon }[] = [
   { id: "services", title: "Сервисы", icon: FileText },
   { id: "map", title: "Кампус", icon: Map },
   { id: "calendar", title: "Календарь", icon: Bell },
+  { id: "profile", title: "Профиль", icon: UserRound },
 ];
 
 function Empty({ children }: { children: React.ReactNode }) {
@@ -33,44 +38,51 @@ function countLabel(count: number, forms: [string, string, string]) {
   return count + " " + forms[rule === "one" ? 0 : rule === "few" ? 1 : 2];
 }
 
-function Schedule({ day, lessons, mapUrl }: { day: string; lessons: DashboardData["lessons"]; mapUrl: string }) {
+function Schedule({ day, lessons, deadlines, mapUrl }: { day: string; lessons: DashboardData["lessons"]; deadlines: DashboardData["deadlines"]; mapUrl: string }) {
   const [weekly, setWeekly] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [openedId, setOpenedId] = useState<string | null>(null);
+  const lastCard = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => { if (!openedId) lastCard.current?.focus(); }, [openedId]);
   const monday = campusDay(weekStart(day));
   const days = weekly ? Array.from({ length: 7 }, (_, index) => plusDays(monday, offset * 7 + index)) : [plusDays(day, 0)];
   const selected = lessons.filter((lesson) => campusDay(new Date(lesson.startsAt)) === day);
-  return <section className="panel schedule">
-    <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><CalendarDays size={21} /></span><div><h2>Расписание</h2><p className="muted">{weekly ? "Занятия по дням недели" : selected.length + " " + lessonForms[new Intl.PluralRules("ru").select(selected.length)] + " сегодня"}</p></div></div>
-      <div className="segmented" aria-label="Период расписания">
-        <button aria-pressed={!weekly} onClick={() => setWeekly(false)}>День</button>
-        <button aria-pressed={weekly} onClick={() => setWeekly(true)}>Неделя</button>
+  const opened = openedId ? lessons.find((lesson) => lesson.id === openedId) : undefined;
+  return <>
+    <section className="panel schedule">
+      <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><CalendarDays size={21} /></span><div><h2>Расписание</h2><p className="muted">{weekly ? "Занятия по дням недели" : selected.length + " " + lessonForms[new Intl.PluralRules("ru").select(selected.length)] + " сегодня"}</p></div></div>
+        <div className="segmented" aria-label="Период расписания">
+          <button aria-pressed={!weekly} onClick={() => setWeekly(false)}>День</button>
+          <button aria-pressed={weekly} onClick={() => setWeekly(true)}>Неделя</button>
+        </div>
       </div>
-    </div>
-    {weekly && <div className="week-controls"><Button variant="icon" aria-label="Предыдущая неделя" onClick={() => setOffset(offset - 1)}><ChevronLeft size={18} /></Button>
-      <WeekPicker week={plusDays(monday, offset * 7)} today={day} onPick={(date) => setOffset(weeksBetween(day, campusDay(date)))} />
-      <Button variant="icon" aria-label="Следующая неделя" onClick={() => setOffset(offset + 1)}><ChevronRight size={18} /></Button></div>}
-    {days.map((date) => {
-      const rows = lessons.filter((item) => campusDay(new Date(item.startsAt)) === campusDay(date));
-      return <div key={campusDay(date)} className="day-group">
-        {weekly && <h3 className="day-heading">{dateLabel(date, true)}</h3>}
-        {rows.length === 0 && <Empty>Занятий нет</Empty>}
-        {rows.map((lesson, index) => {
-          const start = new Date(lesson.startsAt);
-          const end = new Date(lesson.endsAt);
-          const previous = rows[index - 1];
-          const gap = previous ? Math.round((+start - Date.parse(previous.endsAt)) / 60000) : 0;
-          return <div key={lesson.id}>
-            {gap > 0 && <div className="break"><Coffee size={14} /> Перерыв <span>{timeLabel(new Date(previous.endsAt))}–{timeLabel(start)} · {gap} мин</span></div>}
-            <article className="lesson">
-              <div className="lesson-top"><span><Clock3 size={14} /> {timeLabel(start)} — {timeLabel(end)}</span><span className={"pill " + (lesson.type === "LECTURE" ? "lecture" : "practice")}>{lesson.type === "LECTURE" ? "Лекция" : "Практика"}</span></div>
-              <h3>{lesson.title}</h3>
-              <div className="lesson-meta"><Link href={mapUrl + "?room=" + encodeURIComponent(lesson.room)}><MapPin size={15} /> Ауд. {lesson.room}</Link><span><UserRound size={15} /> {lesson.teacher}</span></div>
-            </article>
-          </div>;
-        })}
-      </div>;
-    })}
-  </section>;
+      {weekly && <div className="week-controls"><Button variant="icon" aria-label="Предыдущая неделя" onClick={() => setOffset(offset - 1)}><ChevronLeft size={18} /></Button>
+        <WeekPicker week={plusDays(monday, offset * 7)} today={day} onPick={(date) => setOffset(weeksBetween(day, campusDay(date)))} />
+        <Button variant="icon" aria-label="Следующая неделя" onClick={() => setOffset(offset + 1)}><ChevronRight size={18} /></Button></div>}
+      {days.map((date) => {
+        const rows = lessons.filter((item) => campusDay(new Date(item.startsAt)) === campusDay(date));
+        return <div key={campusDay(date)} className="day-group">
+          {weekly && <h3 className="day-heading">{dateLabel(date, true)}</h3>}
+          {rows.length === 0 && <Empty>Занятий нет</Empty>}
+          {rows.map((lesson, index) => {
+            const start = new Date(lesson.startsAt);
+            const end = new Date(lesson.endsAt);
+            const previous = rows[index - 1];
+            const gap = previous ? Math.round((+start - Date.parse(previous.endsAt)) / 60000) : 0;
+            return <div key={lesson.id}>
+              {gap > 0 && <div className="break"><Coffee size={14} /> Перерыв <span>{timeLabel(new Date(previous.endsAt))}–{timeLabel(start)} · {gap} мин</span></div>}
+              <button type="button" className="lesson lesson-card" aria-haspopup="dialog" onClick={(event) => { lastCard.current = event.currentTarget; setOpenedId(lesson.id); }}>
+                <div className="lesson-top"><span><Clock3 size={14} /> {timeLabel(start)} — {timeLabel(end)}</span><LessonTypeBadge type={lesson.type} /></div>
+                <h3>{lesson.title}</h3>
+                <div className="lesson-meta"><span><MapPin size={15} /> Ауд. {lesson.room || "—"}</span><span><UserRound size={15} /> {lesson.teacher}</span></div>
+              </button>
+            </div>;
+          })}
+        </div>;
+      })}
+    </section>
+    {opened && <LessonDialog lesson={opened} deadlines={deadlines} mapUrl={mapUrl} onClose={() => setOpenedId(null)} />}
+  </>;
 }
 
 function Deadlines({ items, day, href }: { items: DashboardData["deadlines"]; day: string; href?: string }) {
@@ -123,11 +135,23 @@ function Services({ role, demo, requests }: { role: "STUDENT" | "STAFF"; demo: b
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [pending, run] = useTransition();
+  const [openedId, setOpenedId] = useState<string | null>(null);
+  const lastRequest = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => { if (!openedId) lastRequest.current?.focus(); }, [openedId]);
   useEffect(() => {
     if (!demo) return;
-    try { setLocal(JSON.parse(localStorage.getItem("dekanat-demo-requests") ?? "[]")); } catch {}
+    try {
+      const raw = JSON.parse(localStorage.getItem("dekanat-demo-requests") ?? "[]") as DashboardData["requests"];
+      setLocal(raw.map((item, index) => ({
+        ...item,
+        number: item.number ?? "З-2026-" + String(1000 + index + 1),
+        updatedAt: item.updatedAt ?? item.createdAt,
+        comment: item.comment ?? null,
+      })));
+    } catch {}
   }, [demo]);
   const rows = demo ? local : requests;
+  const opened = openedId ? rows.find((request) => request.id === openedId) : undefined;
 
   function submit(type: RequestType) {
     setError("");
@@ -135,7 +159,8 @@ function Services({ role, demo, requests }: { role: "STUDENT" | "STAFF"; demo: b
     run(async () => {
       try {
         if (demo) {
-          const next: DashboardData["requests"] = [{ id: crypto.randomUUID(), type, status: "PROCESSING", createdAt: new Date().toISOString() }, ...local];
+          const now = new Date().toISOString();
+          const next: DashboardData["requests"] = [{ id: crypto.randomUUID(), number: "З-2026-" + String(1000 + local.length + 1), type, status: "PROCESSING", createdAt: now, updatedAt: now, comment: null }, ...local];
           localStorage.setItem("dekanat-demo-requests", JSON.stringify(next));
           setLocal(next);
         } else {
@@ -156,22 +181,29 @@ function Services({ role, demo, requests }: { role: "STUDENT" | "STAFF"; demo: b
       {message && <p className="muted" role="status">{message}</p>}
       {!choice && error && <p className="form-error" role="alert">{error}</p>}
       {rows.length === 0 && <Empty>Заявок пока нет</Empty>}
-      {rows.map((request) => <article className="request-row" key={request.id}><div><h3>{services[request.type]}</h3><p className="muted">{request.student && request.student + " · "}{dateLabel(new Date(request.createdAt))}</p></div>
-        <span className={"pill " + (request.status === "READY" ? "ready" : "lecture")}>{statuses[request.status]}</span>
-        {role === "STAFF" && <Button variant="secondary" disabled={pending} onClick={() => run(async () => {
-          setError("");
-          try {
-            const result = await changeStatus(request.id, request.status === "READY" ? "PROCESSING" : "READY");
-            setError(result.error ?? "");
-          } catch { setError("Не удалось обновить статус."); }
-        })}>{request.status === "READY" ? "Вернуть в обработку" : "Отметить готовой"}</Button>}
-      </article>)}
+      {rows.map((request) => {
+        const content = <>
+          <div><h3>{services[request.type]}</h3><p className="muted">{request.student && request.student + " · "}{dateLabel(new Date(request.createdAt))}</p></div>
+          <span className={"pill " + requestStatusClass[request.status]}>{statuses[request.status]}</span>
+          {role === "STAFF" && <Button variant="secondary" disabled={pending} onClick={() => run(async () => {
+            setError("");
+            try {
+              const result = await changeStatus(request.id, request.status === "READY" ? "PROCESSING" : "READY");
+              setError(result.error ?? "");
+            } catch { setError("Не удалось обновить статус."); }
+          })}>{request.status === "READY" ? "Вернуть в обработку" : "Отметить готовой"}</Button>}
+        </>;
+        return role === "STUDENT"
+          ? <button type="button" className="request-row request-card" key={request.id} aria-haspopup="dialog" onClick={(event) => { lastRequest.current = event.currentTarget; setOpenedId(request.id); }}>{content}<ChevronRight size={18} /></button>
+          : <article className="request-row" key={request.id}>{content}</article>;
+      })}
     </section>
     {choice && <dialog ref={(node) => { if (node && !node.open) node.showModal(); }} className="confirm-dialog" aria-labelledby="confirm-title" onCancel={(event) => { event.preventDefault(); if (!pending) setChoice(undefined); }}><div className="panel">
       <h2 id="confirm-title">{services[choice]}</h2><p className="muted">Заявка появится в списке со статусом «В обработке».</p>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="dialog-actions"><Button variant="secondary" disabled={pending} onClick={() => setChoice(undefined)}>Отмена</Button><Button autoFocus disabled={pending} onClick={() => submit(choice)}>{pending ? "Отправляем…" : "Подать заявку"}</Button></div>
     </div></dialog>}
+    {opened && <RequestDialog request={opened} onClose={() => setOpenedId(null)} />}
   </div>;
 }
 
@@ -181,9 +213,9 @@ export function Dashboard({ tab, day, data, role, name, demo = false, initialRoo
   const [menu, setMenu] = useState(false);
   const [selectedDay, setSelectedDay] = useState("");
   const base = demo ? "/demo/" : "/cabinet/";
-  const nav = (className: string) => <nav className={className} aria-label="Основные разделы">{navigation.map(({ id, title, icon: Icon }) =>
+  const nav = (className: string) => <nav className={className} aria-label="Основные разделы">{navigation.filter((item) => !(demo && item.id === "profile")).map(({ id, title, icon: Icon }) =>
     <Link key={id} href={id === "services" && role === "STAFF" ? "/staff" : base + id} aria-current={tab === id ? "page" : undefined}><Icon size={21} /><span>{title}</span></Link>)}</nav>;
-  const title = { today: "Сегодня", grades: "Успеваемость", services: "Сервисы деканата", map: "Карта кампуса", calendar: "Календарь дедлайнов" }[tab];
+  const title = { today: "Сегодня", grades: "Успеваемость", services: "Сервисы деканата", map: "Карта кампуса", calendar: "Календарь дедлайнов", profile: "Профиль" }[tab];
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -211,7 +243,7 @@ export function Dashboard({ tab, day, data, role, name, demo = false, initialRoo
       </section> : <div className="page-heading"><h1>{title}</h1></div>}
       {tab === "today" && <div className="content-stack">
         <div className="dashboard-grid">
-          <Schedule lessons={data.lessons} day={day} mapUrl={base + "map"} />
+          <Schedule lessons={data.lessons} deadlines={data.deadlines} day={day} mapUrl={base + "map"} />
           <div className="content-stack"><Deadlines items={data.deadlines} day={day} href={base + "calendar"} />
             <Link className="panel route-link" href={base + "map"}><span className="soft-icon"><Route size={22} /></span><div><h2>Найти аудиторию</h2><p className="muted">Маршрут по кампусу</p></div><ArrowDownRight size={19} /></Link>
           </div>
@@ -219,6 +251,7 @@ export function Dashboard({ tab, day, data, role, name, demo = false, initialRoo
         <News items={data.news} />
       </div>}
       {tab === "grades" && <Grades grades={data.grades} />}
+      {tab === "profile" && <ProfileView />}
       {tab === "services" && <Services role={role} requests={data.requests} demo={demo} />}
       {tab === "map" && <Campus key={initialRoom ?? "campus"} lessons={data.lessons} initialRoom={initialRoom} />}
       {tab === "calendar" && <div className="content-stack">
