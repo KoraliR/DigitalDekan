@@ -41,7 +41,7 @@ export async function processRequest(form: FormData) {
     const id = field(input, "id", 100);
     const request = await tx.serviceRequest.findFirst({
       where: { id, user: scope },
-      select: { id: true, userId: true, type: true, revision: true, status: true, user: { select: { groupId: true } } },
+      select: { id: true, userId: true, type: true, revision: true, status: true, user: { select: { studentProfile: { select: { groupId: true } } } } },
     });
     if (!request) forbidden();
     const status = field(input, "status", 20) as RequestStatus;
@@ -61,7 +61,7 @@ export async function processRequest(form: FormData) {
       userId: request.userId, title: services[request.type] + " · " + statuses[status],
       body: [comment, readyBy ? "Срок готовности — " + dateLabel(readyBy) : ""].filter(Boolean).join("\n") || "Заявка обновлена.",
     } });
-    await tx.auditEntry.create({ data: { actorId: staffId, groupId: request.user.groupId, summary: "Заявка " + id + " · " + statuses[request.status] + " → " + statuses[status] } });
+    await tx.auditEntry.create({ data: { actorId: staffId, groupId: request.user.studentProfile?.groupId, summary: "Заявка " + id + " · " + statuses[request.status] + " → " + statuses[status] } });
   });
 }
 
@@ -80,7 +80,7 @@ export async function publish(form: FormData) {
       ...(kind === "course" ? { course: Number(value) } : {}),
       ...(kind === "group" ? { id: value } : {}),
     }, select: { id: true } });
-    const recipients = await tx.user.findMany({ where: { ...staffStudents(staffId), groupId: { in: groups.map((group) => group.id) } }, select: { id: true } });
+    const recipients = await tx.user.findMany({ where: staffStudents(staffId, { in: groups.map((group) => group.id) }), select: { id: true } });
     requireInput(recipients.length, "В этой аудитории нет доступных студентов.");
     const prefix = field(input, "kind", 15) === "reminder" ? "Напоминание · " : "";
     await tx.notification.createMany({ data: recipients.map(({ id }) => ({ userId: id, title: prefix + title, body })) });
@@ -116,7 +116,7 @@ export async function saveLesson(form: FormData) {
       requireInput(title && teacher && room && (type === "LECTURE" || type === "PRACTICE"), "Заполните данные занятия.");
       await tx.groupLesson.create({ data: { groupId, title, teacher, room, type, startsAt, endsAt } });
     }
-    const students = await tx.user.findMany({ where: { ...staffStudents(staffId), groupId }, select: { id: true } });
+    const students = await tx.user.findMany({ where: staffStudents(staffId, groupId), select: { id: true } });
     const newTime = dateLabel(startsAt) + ", " + timeLabel(startsAt) + "–" + timeLabel(endsAt);
     if (students.length) await tx.notification.createMany({ data: students.map((student) => ({
       userId: student.id, title: (id ? "Перенос занятия · " : "Новое занятие · ") + title,
@@ -129,7 +129,7 @@ export async function saveGrade(form: FormData) {
   await mutate("grades", form, async (tx, staffId, input) => {
     const student = await tx.user.findFirst({
       where: { id: field(input, "student", 100), ...staffStudents(staffId) },
-      select: { id: true, groupId: true, name: true },
+      select: { id: true, name: true, studentProfile: { select: { groupId: true } } },
     });
     if (!student) forbidden();
     const title = field(input, "title", 120);
@@ -152,7 +152,7 @@ export async function saveGrade(form: FormData) {
       await tx.grade.create({ data: { ...key, score, threshold } });
     }
     await tx.auditEntry.create({ data: {
-      actorId: staffId, groupId: student.groupId,
+      actorId: staffId, groupId: student.studentProfile?.groupId,
       summary: student.name + " · " + title + " · семестр " + term + " · " + (previous ? previous.score + "/" + previous.threshold + " → " : "") + score + "/" + threshold,
     } });
   });

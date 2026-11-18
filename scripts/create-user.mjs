@@ -20,6 +20,7 @@ const db = new PrismaClient();
 try {
   await db.user.create({ data: {
     login: login.trim().toLowerCase(), name: name.join(" "), role, passwordHash: await hash(password, 12),
+    ...(role === "STUDENT" ? { studentProfile: { create: {} } } : { staffProfile: { create: {} } }),
   } });
   console.log("Учётная запись создана.");
 } finally {

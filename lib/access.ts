@@ -8,15 +8,15 @@ export async function account(role?: Role) {
   if (!session?.accountId) redirect("/login");
   const user = await db.user.findUnique({
     where: { id: session.accountId },
-    select: { id: true, name: true, role: true, groupId: true },
+    select: { id: true, name: true, role: true, studentProfile: { select: { groupId: true } } },
   });
   if (!user) redirect("/login");
   if (role && role !== user.role) forbidden();
-  return user;
+  return { id: user.id, name: user.name, role: user.role, groupId: user.studentProfile?.groupId };
 }
 export function staffGroups(staffId: string) {
-  return { staff: { some: { id: staffId, role: "STAFF" as const } } };
+  return { staff: { some: { userId: staffId, user: { role: "STAFF" as const } } } };
 }
-export function staffStudents(staffId: string) {
-  return { role: "STUDENT" as const, group: staffGroups(staffId) };
+export function staffStudents(staffId: string, groupId?: string | { in: string[] }) {
+  return { role: "STUDENT" as const, studentProfile: { groupId, group: staffGroups(staffId) } };
 }

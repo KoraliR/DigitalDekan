@@ -208,3 +208,9 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
 .request-note { flex-basis: 100%; }
 .message-body { white-space: pre-wrap; overflow-wrap: anywhere; }
 .staff-workspace > header { flex-wrap: wrap; }
+.staff-nav a { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 719px) {
+  .staff-workspace { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+  .staff-nav { position: fixed; inset: auto 0 0; z-index: 3; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 2px; padding: 4px 3px calc(4px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+  .staff-nav a { flex-direction: column; justify-content: center; min-height: 50px; padding: 4px 0; gap: 3px; font-size: 10px; }
+}
