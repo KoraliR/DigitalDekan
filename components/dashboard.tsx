@@ -6,7 +6,7 @@ import {
   CircleHelp, Clock3, Coffee, FileText, GraduationCap, Info, LogOut, Map, MapPin, Megaphone, Menu,
   Route, Shield, UserRound, X, type LucideIcon,
 } from "lucide-react";
-import { apply, changeStatus, logout } from "@/app/actions";
+import { apply, logout } from "@/app/actions";
 import { campusDay, dateLabel, plusDays, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
 import type { Tab } from "@/lib/tabs";
 import { Button } from "@/components/ui/button";
@@ -91,8 +91,8 @@ function Deadlines({ items, day, href }: { items: DashboardData["deadlines"]; da
 
 function News({ items }: { items: DashboardData["news"] }) {
   return <section className="panel news">
-    <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><Megaphone size={20} /></span><div><h2>Новости деканата</h2><p className="muted">Объявления учебного офиса</p></div></div></div>
-    {items.length ? <div className="news-list">{items.map((item) => <article key={item.id}><h3>{item.title}</h3><p className="muted">{item.body}</p></article>)}</div> : <Empty>Новостей пока нет</Empty>}
+    <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><Megaphone size={20} /></span><div><h2>Уведомления и новости</h2><p className="muted">Объявления учебного офиса</p></div></div></div>
+    {items.length ? <div className="news-list">{items.map((item) => <article key={item.id}><h3>{item.title}</h3><p className="muted message-body">{item.body}</p></article>)}</div> : <Empty>Новостей пока нет</Empty>}
   </section>;
 }
 
@@ -117,7 +117,7 @@ function Grades({ grades }: { grades: DashboardData["grades"] }) {
   </section>;
 }
 
-function Services({ role, demo, requests }: { role: "STUDENT" | "STAFF"; demo: boolean; requests: DashboardData["requests"] }) {
+function Services({ demo, requests }: { demo: boolean; requests: DashboardData["requests"] }) {
   const [choice, setChoice] = useState<RequestType>();
   const [local, setLocal] = useState<DashboardData["requests"]>([]);
   const [message, setMessage] = useState("");
@@ -135,7 +135,7 @@ function Services({ role, demo, requests }: { role: "STUDENT" | "STAFF"; demo: b
     run(async () => {
       try {
         if (demo) {
-          const next: DashboardData["requests"] = [{ id: crypto.randomUUID(), type, status: "PROCESSING", createdAt: new Date().toISOString() }, ...local];
+          const next: DashboardData["requests"] = [{ id: crypto.randomUUID(), type, status: "NEW", createdAt: new Date().toISOString() }, ...local];
           localStorage.setItem("dekanat-demo-requests", JSON.stringify(next));
           setLocal(next);
         } else {
@@ -149,26 +149,21 @@ function Services({ role, demo, requests }: { role: "STUDENT" | "STAFF"; demo: b
   }
 
   return <div className="content-stack">
-    {role === "STUDENT" && <section className="panel"><h2>Справки и обращения</h2><div className="service-list">
+    <section className="panel"><h2>Справки и обращения</h2><div className="service-list">
       {(Object.keys(services) as RequestType[]).map((type) => <button className="service-item" key={type} onClick={() => { setChoice(type); setError(""); setMessage(""); }}><span className="soft-icon"><FileText size={19} /></span><strong>{services[type]}</strong><ChevronRight size={18} /></button>)}
-    </div></section>}
-    <section className="panel"><h2>{role === "STAFF" ? "Все заявки" : "Мои заявки"}</h2>
+    </div></section>
+    <section className="panel"><h2>Мои заявки</h2>
       {message && <p className="muted" role="status">{message}</p>}
       {!choice && error && <p className="form-error" role="alert">{error}</p>}
       {rows.length === 0 && <Empty>Заявок пока нет</Empty>}
-      {rows.map((request) => <article className="request-row" key={request.id}><div><h3>{services[request.type]}</h3><p className="muted">{request.student && request.student + " · "}{dateLabel(new Date(request.createdAt))}</p></div>
+      {rows.map((request) => <article className="request-row" key={request.id}><div><h3>{services[request.type]}</h3><p className="muted">{dateLabel(new Date(request.createdAt))}</p></div>
         <span className={"pill " + (request.status === "READY" ? "ready" : "lecture")}>{statuses[request.status]}</span>
-        {role === "STAFF" && <Button variant="secondary" disabled={pending} onClick={() => run(async () => {
-          setError("");
-          try {
-            const result = await changeStatus(request.id, request.status === "READY" ? "PROCESSING" : "READY");
-            setError(result.error ?? "");
-          } catch { setError("Не удалось обновить статус."); }
-        })}>{request.status === "READY" ? "Вернуть в обработку" : "Отметить готовой"}</Button>}
+        {!demo && <Link className="text-link" href={"/cabinet/requests/" + request.id}>Подробнее</Link>}
+        {(request.comment || request.readyBy) && <p className="request-note message-body">{request.comment}{request.readyBy && <><br />Срок готовности: {dateLabel(new Date(request.readyBy))}</>}</p>}
       </article>)}
     </section>
     {choice && <dialog ref={(node) => { if (node && !node.open) node.showModal(); }} className="confirm-dialog" aria-labelledby="confirm-title" onCancel={(event) => { event.preventDefault(); if (!pending) setChoice(undefined); }}><div className="panel">
-      <h2 id="confirm-title">{services[choice]}</h2><p className="muted">Заявка появится в списке со статусом «В обработке».</p>
+      <h2 id="confirm-title">{services[choice]}</h2><p className="muted">Заявка появится в списке со статусом «Новая».</p>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="dialog-actions"><Button variant="secondary" disabled={pending} onClick={() => setChoice(undefined)}>Отмена</Button><Button autoFocus disabled={pending} onClick={() => submit(choice)}>{pending ? "Отправляем…" : "Подать заявку"}</Button></div>
     </div></dialog>}
@@ -219,10 +214,11 @@ export function Dashboard({ tab, day, data, role, name, demo = false, initialRoo
         <News items={data.news} />
       </div>}
       {tab === "grades" && <Grades grades={data.grades} />}
-      {tab === "services" && <Services role={role} requests={data.requests} demo={demo} />}
+      {tab === "services" && <Services requests={data.requests} demo={demo} />}
       {tab === "map" && <Campus key={initialRoom ?? "campus"} lessons={data.lessons} initialRoom={initialRoom} />}
       {tab === "calendar" && <div className="content-stack">
         <div className="dashboard-grid campus-grid"><DeadlineCalendar day={day} items={data.deadlines} selected={selectedDay} onSelect={setSelectedDay} /><Deadlines items={selectedDay ? data.deadlines.filter((item) => campusDay(new Date(item.dueAt)) === selectedDay) : data.deadlines} day={day} /></div>
+        <News items={data.news} />
       </div>}
     </main></div>
     {nav("bottom-nav")}

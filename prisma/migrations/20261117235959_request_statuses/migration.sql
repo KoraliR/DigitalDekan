@@ -1,0 +1,2 @@
+ALTER TYPE "RequestStatus" ADD VALUE 'NEW';
+ALTER TYPE "RequestStatus" ADD VALUE 'REJECTED';

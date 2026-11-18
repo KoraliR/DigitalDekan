@@ -4,7 +4,7 @@ export const services: Record<RequestType, string> = {
   MILITARY: "Справка для военкомата",
   APPOINTMENT: "Вызов в деканат",
 };
-export const statuses: Record<RequestStatus, string> = { PROCESSING: "В обработке", READY: "Готово" };
+export const statuses: Record<RequestStatus, string> = { NEW: "Новая", PROCESSING: "В работе", READY: "Готово", REJECTED: "Отклонена" };
 
 export function campusDay(date: Date) {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Moscow", dateStyle: "short" }).format(date);
@@ -29,6 +29,6 @@ export interface DashboardData {
   lessons: { id: string; title: string; teacher: string; room: string; type: "LECTURE" | "PRACTICE"; startsAt: string; endsAt: string }[];
   grades: { id: string; title: string; score: number; threshold: number; term: number }[];
   deadlines: { id: string; title: string; course: string; dueAt: string }[];
-  requests: { id: string; type: RequestType; status: RequestStatus; createdAt: string; student?: string }[];
+  requests: { id: string; type: RequestType; status: RequestStatus; createdAt: string; comment?: string | null; readyBy?: string | null }[];
   news: { id: string; title: string; body: string }[];
 }

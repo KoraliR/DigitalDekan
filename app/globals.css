@@ -192,3 +192,19 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
 .select-control { min-height: 36px; max-width: 100%; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--ink); padding: 5px 9px; font-size: 12px; font-weight: 800; }
 .select-control:hover { background: var(--soft); }
 .banner-date::first-letter { text-transform: uppercase; }
+.staff-workspace { display: grid; gap: 14px; max-width: 1100px; }
+.staff-nav { display: flex; flex-wrap: wrap; gap: 6px; }
+.staff-nav a { padding: 8px 12px; border-radius: 10px; font-weight: 800; }
+.staff-nav a[aria-current="page"] { background: var(--tint); color: var(--accent-ink); }
+.staff-metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; }
+.staff-metrics a { display: grid; }
+.staff-metrics strong { font-size: 27px; color: var(--accent-ink); }
+.staff-row { border-top: 1px solid var(--line); padding: 11px 0; overflow-wrap: anywhere; }
+.staff-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,175px),1fr)); gap: 10px; align-items: end; margin: 12px 0; }
+.staff-fields label { display: grid; gap: 4px; min-width: 0; font-weight: 700; }
+.staff-fields input, .staff-fields select, .staff-fields textarea { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+.staff-fields textarea { min-height: 75px; }
+.staff-wide, .request-note { grid-column: 1 / -1; }
+.request-note { flex-basis: 100%; }
+.message-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.staff-workspace > header { flex-wrap: wrap; }

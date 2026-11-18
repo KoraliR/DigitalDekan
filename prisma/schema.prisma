@@ -15,8 +15,10 @@ enum RequestType {
   APPOINTMENT
 }
 enum RequestStatus {
+  NEW
   PROCESSING
   READY
+  REJECTED
 }
 enum LessonType {
   LECTURE
@@ -28,6 +30,11 @@ model User {
   name         String
   passwordHash String
   role         Role         @default(STUDENT)
+  groupId      String?
+  group        StudyGroup?  @relation("StudentGroup", fields: [groupId], references: [id], onDelete: SetNull)
+  staffGroups  StudyGroup[] @relation("StaffGroups")
+  notifications Notification[]
+  audits       AuditEntry[]
   lessons      Lesson[]
   grades       Grade[]
   deadlines    Deadline[]
@@ -69,9 +76,12 @@ model ServiceRequest {
   userId    String
   user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      RequestType
-  status    RequestStatus @default(PROCESSING)
+  status    RequestStatus @default(NEW)
   createdAt DateTime      @default(now())
   @@index([userId, createdAt])
+  comment   String?
+  readyBy   DateTime?
+  revision  Int @default(0)
   @@index([createdAt])
 }
 model News {
@@ -88,4 +98,43 @@ model LoginChallenge {
   expiresAt DateTime
   attempts  Int      @default(0)
   @@index([expiresAt])
+}
+model StudyGroup {
+  id       String @id @default(cuid())
+  name     String @unique
+  faculty  String
+  course   Int
+  students User[] @relation("StudentGroup")
+  staff    User[] @relation("StaffGroups")
+  lessons  GroupLesson[]
+}
+model GroupLesson {
+  id       String @id @default(cuid())
+  groupId  String
+  group    StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  title    String
+  teacher  String
+  room     String
+  type     LessonType
+  startsAt DateTime
+  endsAt   DateTime
+  @@index([groupId, startsAt])
+}
+model Notification {
+  id        String @id @default(cuid())
+  userId    String
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+  @@index([userId, createdAt])
+}
+model AuditEntry {
+  id        String @id @default(cuid())
+  actorId   String
+  actor     User @relation(fields: [actorId], references: [id])
+  groupId   String?
+  summary   String
+  createdAt DateTime @default(now())
+  @@index([groupId, createdAt])
 }
