@@ -50,54 +50,59 @@ export function DeadlineCalendar({ day, items, selected, onSelect }: {
   </section>;
 }
 
-export function WeekPicker({ week, today, onPick }: {
-  week: Date;
+export function SchedulePicker({ mode, value, today, onPick }: {
+  mode: "day" | "week";
+  value: Date;
   today: string;
   onPick: (date: Date) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [month, setMonth] = useState(() => monthOf(week));
-  const monday = campusDay(week);
+  const [month, setMonth] = useState(() => monthOf(value));
+  const monday = campusDay(value);
   const sunday = campusDay(plusDays(monday, 6));
+  const valueKey = campusDay(value);
   const start = (month.getUTCDay() + 6) % 7;
   const days = new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + 1, 0)).getUTCDate();
+  const label = mode === "week" ? rangeLabel(value, plusDays(sunday, 0)) : dateLabel(value, true) + (valueKey === today ? " · сегодня" : "");
+
   function shift(offset: number) {
     setMonth(new Date(Date.UTC(month.getUTCFullYear(), month.getUTCMonth() + offset, 1, 12)));
   }
   function toggle() {
     setOpen(!open);
-    setMonth(monthOf(week));
+    setMonth(monthOf(value));
   }
   function pick(date: Date) {
     onPick(date);
     setOpen(false);
   }
+
   return <div className="week-picker" onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
-    <button type="button" className="week-trigger" aria-expanded={open} aria-haspopup="dialog" onClick={toggle}>
-      {rangeLabel(week, plusDays(sunday, 0))} <ChevronDown size={15} />
+    <button type="button" className="week-trigger" aria-expanded={open} aria-haspopup="dialog" aria-label={mode === "week" ? "Выбрать неделю" : "Выбрать день"} onClick={toggle}>
+      {label} <ChevronDown size={15} />
     </button>
     {open && <>
-      <button type="button" className="week-backdrop" aria-label="Закрыть выбор недели" tabIndex={-1} onClick={() => setOpen(false)} />
-      <div className="panel week-popover" role="dialog" aria-label="Выбор недели">
+      <button type="button" className="week-backdrop" aria-label="Закрыть календарь" tabIndex={-1} onClick={() => setOpen(false)} />
+      <div className="panel week-popover" role="dialog" aria-label={mode === "week" ? "Выбор недели" : "Выбор дня"}>
         <div className="section-head">
           <Button variant="icon" aria-label="Предыдущий месяц" onClick={() => shift(-1)}><ChevronLeft size={18} /></Button>
           <strong className="calendar-month">{new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "Europe/Moscow" }).format(month)}</strong>
           <Button variant="icon" aria-label="Следующий месяц" onClick={() => shift(1)}><ChevronRight size={18} /></Button>
         </div>
         <div className="calendar-grid week-grid">
-          {weekdays.map((label) => <span className="muted" key={label}>{label}</span>)}
+          {weekdays.map((day) => <span className="muted" key={day}>{day}</span>)}
           {Array.from({ length: start }, (_, index) => <span key={"blank" + index} />)}
           {Array.from({ length: days }, (_, index) => {
             const date = plusDays(campusDay(month), index);
             const key = campusDay(date);
-            const inWeek = key >= monday && key <= sunday;
-            return <button key={key} type="button" className={inWeek ? "in-week" : undefined} aria-current={key === today ? "date" : undefined} aria-label={dateLabel(date, true) + (inWeek ? ", выбранная неделя" : "")} onClick={() => pick(date)} autoFocus={key === monday}>
+            const active = mode === "week" ? key >= monday && key <= sunday : key === valueKey;
+            return <button key={key} type="button" className={active ? "in-week" : undefined} aria-current={key === today ? "date" : undefined} aria-label={dateLabel(date, true) + (active ? (mode === "week" ? ", выбранная неделя" : ", выбранный день") : "")} onClick={() => pick(date)} autoFocus={mode === "week" ? key === monday : key === valueKey}>
               {index + 1}
             </button>;
           })}
         </div>
         <div className="week-popover-foot">
-          <button type="button" className="link-button" onClick={() => pick(plusDays(today, 0))}>Текущая неделя</button>
+          <button type="button" className="link-button" onClick={() => pick(plusDays(today, 0))}>{mode === "week" ? "Текущая неделя" : "Сегодня"}</button>
           <button type="button" className="link-button" onClick={() => setOpen(false)}>Закрыть</button>
         </div>
       </div>

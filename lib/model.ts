@@ -1,4 +1,4 @@
-import type { RequestStatus, RequestType, LessonType, AttendanceStatus } from "@prisma/client";
+import type { RequestStatus, RequestType, LessonType, AttendanceStatus, AssessmentType } from "@prisma/client";
 export const services: Record<RequestType, string> = {
   STUDY: "Справка об обучении",
   MILITARY: "Справка для военкомата",
@@ -31,6 +31,20 @@ export const attendanceStatuses: Record<AttendanceStatus, { label: string; class
   ABSENT: { label: "Отсутствовал", className: "absent" },
   EXCUSED: { label: "Уважительная причина", className: "excused" },
 };
+export const assessments: Record<AssessmentType, { label: string; className: string }> = {
+  EXAM: { label: "Экзамен", className: "practice" },
+  TEST: { label: "Зачёт", className: "test" },
+  COURSEWORK: { label: "Курсовая работа", className: "warn" },
+};
+const gradeWords = ["", "", "Неудовлетворительно", "Удовлетворительно", "Хорошо", "Отлично"];
+export function finalGradeLabel(grade: { assessment: AssessmentType | null; finalGrade: number | null; passed: boolean | null }) {
+  if (grade.assessment === "TEST") {
+    if (grade.passed === null) return "—";
+    return grade.passed ? "Зачтено" : "Не зачтено";
+  }
+  if (grade.finalGrade === null) return "—";
+  return grade.finalGrade + " · " + (gradeWords[grade.finalGrade] ?? "");
+}
 export interface LessonTeacher {
   name: string;
   position?: string;
@@ -78,9 +92,12 @@ export function weekStart(day: string) {
 export function weeksBetween(from: string, to: string) {
   return Math.round((+weekStart(to) - +weekStart(from)) / 604800000);
 }
+export function daysBetween(from: string, to: string) {
+  return Math.round((+plusDays(to, 0) - +plusDays(from, 0)) / 86400000);
+}
 export interface DashboardData {
   lessons: LessonView[];
-  grades: { id: string; title: string; score: number; threshold: number; term: number }[];
+  grades: { id: string; title: string; score: number; threshold: number; term: number; assessment: AssessmentType | null; finalGrade: number | null; passed: boolean | null }[];
   deadlines: DeadlineView[];
   requests: RequestView[];
   news: { id: string; title: string; body: string }[];

@@ -7,12 +7,12 @@ import {
   Route, Shield, UserRound, X, type LucideIcon,
 } from "lucide-react";
 import { apply, logout } from "@/app/actions";
-import { campusDay, dateLabel, plusDays, requestStatusClass, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
+import { campusDay, dateLabel, daysBetween, finalGradeLabel, assessments, plusDays, requestStatusClass, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
 import type { Tab } from "@/lib/tabs";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme";
 import { Campus } from "./campus";
-import { DeadlineCalendar, WeekPicker } from "./calendar";
+import { DeadlineCalendar, SchedulePicker } from "./calendar";
 import { ProfileView } from "./profile";
 import { LessonTypeBadge } from "./lesson-meta";
 import { LessonDialog } from "./lesson-dialog";
@@ -40,25 +40,32 @@ function countLabel(count: number, forms: [string, string, string]) {
 
 function Schedule({ day, lessons, deadlines, mapUrl }: { day: string; lessons: DashboardData["lessons"]; deadlines: DashboardData["deadlines"]; mapUrl: string }) {
   const [weekly, setWeekly] = useState(false);
-  const [offset, setOffset] = useState(0);
+  const [dayOffset, setDayOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(0);
   const [openedId, setOpenedId] = useState<string | null>(null);
   const lastCard = useRef<HTMLButtonElement | null>(null);
   useEffect(() => { if (!openedId) lastCard.current?.focus(); }, [openedId]);
   const monday = campusDay(weekStart(day));
-  const days = weekly ? Array.from({ length: 7 }, (_, index) => plusDays(monday, offset * 7 + index)) : [plusDays(day, 0)];
-  const selected = lessons.filter((lesson) => campusDay(new Date(lesson.startsAt)) === day);
+  const active = weekly ? plusDays(monday, weekOffset * 7) : plusDays(day, dayOffset);
+  const activeKey = campusDay(active);
+  const days = weekly ? Array.from({ length: 7 }, (_, index) => plusDays(monday, weekOffset * 7 + index)) : [active];
+  const activeDayLessons = lessons.filter((lesson) => campusDay(new Date(lesson.startsAt)) === activeKey);
   const opened = openedId ? lessons.find((lesson) => lesson.id === openedId) : undefined;
+  const shift = (delta: number) => { if (weekly) setWeekOffset(weekOffset + delta); else setDayOffset(dayOffset + delta); };
+  const subtitle = weekly ? "Занятия по дням недели"
+    : activeDayLessons.length + " " + lessonForms[new Intl.PluralRules("ru").select(activeDayLessons.length)] + (activeKey === day ? " сегодня" : " · " + dateLabel(active, true));
   return <>
     <section className="panel schedule">
-      <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><CalendarDays size={21} /></span><div><h2>Расписание</h2><p className="muted">{weekly ? "Занятия по дням недели" : selected.length + " " + lessonForms[new Intl.PluralRules("ru").select(selected.length)] + " сегодня"}</p></div></div>
+      <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><CalendarDays size={21} /></span><div><h2>Расписание</h2><p className="muted">{subtitle}</p></div></div>
         <div className="segmented" aria-label="Период расписания">
           <button aria-pressed={!weekly} onClick={() => setWeekly(false)}>День</button>
           <button aria-pressed={weekly} onClick={() => setWeekly(true)}>Неделя</button>
         </div>
       </div>
-      {weekly && <div className="week-controls"><Button variant="icon" aria-label="Предыдущая неделя" onClick={() => setOffset(offset - 1)}><ChevronLeft size={18} /></Button>
-        <WeekPicker week={plusDays(monday, offset * 7)} today={day} onPick={(date) => setOffset(weeksBetween(day, campusDay(date)))} />
-        <Button variant="icon" aria-label="Следующая неделя" onClick={() => setOffset(offset + 1)}><ChevronRight size={18} /></Button></div>}
+      <div className="week-controls"><Button variant="icon" aria-label={weekly ? "Предыдущая неделя" : "Предыдущий день"} onClick={() => shift(-1)}><ChevronLeft size={18} /></Button>
+        <SchedulePicker mode={weekly ? "week" : "day"} value={active} today={day}
+          onPick={(date) => { if (weekly) setWeekOffset(weeksBetween(day, campusDay(date))); else setDayOffset(daysBetween(day, campusDay(date))); }} />
+        <Button variant="icon" aria-label={weekly ? "Следующая неделя" : "Следующий день"} onClick={() => shift(1)}><ChevronRight size={18} /></Button></div>
       {days.map((date) => {
         const rows = lessons.filter((item) => campusDay(new Date(item.startsAt)) === campusDay(date));
         return <div key={campusDay(date)} className="day-group">
@@ -113,20 +120,43 @@ function Grades({ grades }: { grades: DashboardData["grades"] }) {
   const [view, setView] = useState(() => (terms.length ? String(terms[0]) : "all"));
   const all = view === "all";
   const rows = all ? grades : grades.filter((grade) => String(grade.term) === view);
-  return <section className="panel">
-    <div className="section-head"><div><h2>Дисциплины</h2><p className="muted">{grades.length ? (all ? "Все семестры" : "Семестр " + view) + " · " + countLabel(rows.length, ["дисциплина", "дисциплины", "дисциплин"]) : "Баллы по дисциплинам"}</p></div>
-      <select className="select-control" aria-label="Семестр" value={view} onChange={(event) => setView(event.target.value)} disabled={!grades.length}>
-        {terms.map((value) => <option key={value} value={String(value)}>Семестр {value}</option>)}
-        <option value="all">Вся учёба</option>
-      </select></div>
-    {rows.length === 0 && <Empty>Оценок пока нет</Empty>}
-    {rows.map((grade) => {
-      const left = Math.max(0, grade.threshold - grade.score);
-      return <article className="grade" key={grade.id}><div><h3>{grade.title}</h3><strong>{grade.score} / {grade.threshold}</strong></div>
-        <progress aria-label={grade.title} max={Math.max(1, grade.threshold)} value={Math.max(0, Math.min(grade.score, grade.threshold))} />
-        <p className="muted">{left ? "До зачёта " + left + " балл." : "Порог зачёта достигнут"}{all && " · Семестр " + grade.term}</p></article>;
-    })}
-  </section>;
+  const currentTerm = terms[0] ?? 0;
+  const pastTerms = terms.filter((term) => term < currentTerm);
+  const meta = (grade: DashboardData["grades"][number]) => assessments[grade.assessment ?? "EXAM"];
+  return <div className="content-stack">
+    <section className="panel">
+      <div className="section-head"><div><h2>Дисциплины</h2><p className="muted">{grades.length ? (all ? "Все семестры" : "Семестр " + view) + " · " + countLabel(rows.length, ["дисциплина", "дисциплины", "дисциплин"]) : "Баллы по дисциплинам"}</p></div>
+        <select className="select-control" aria-label="Семестр" value={view} onChange={(event) => setView(event.target.value)} disabled={!grades.length}>
+          {terms.map((value) => <option key={value} value={String(value)}>Семестр {value}</option>)}
+          <option value="all">Вся учёба</option>
+        </select></div>
+      {rows.length === 0 && <Empty>Оценок пока нет</Empty>}
+      {rows.map((grade) => {
+        const left = Math.max(0, grade.threshold - grade.score);
+        const type = meta(grade);
+        return <article className="grade" key={grade.id}>
+          <div><h3>{grade.title} <span className={"pill " + type.className}>{type.label}</span></h3><strong>{grade.score} / {grade.threshold}</strong></div>
+          <progress aria-label={grade.title} max={Math.max(1, grade.threshold)} value={Math.max(0, Math.min(grade.score, grade.threshold))} />
+          <p className="muted">{left ? "До порога " + left + " балл." : "Порог достигнут"}{all && " · Семестр " + grade.term}</p>
+          <p className="grade-final-label">Итог: <strong>{finalGradeLabel(grade)}</strong></p>
+        </article>;
+      })}
+    </section>
+    {pastTerms.length > 0 && <section className="panel" aria-labelledby="grade-history-title">
+      <div className="section-head"><div><h2 id="grade-history-title">Итоги прошлых семестров</h2><p className="muted">Вид аттестации и итоговая оценка</p></div></div>
+      {pastTerms.map((term) => <div key={term} className="grade-history">
+        <h3 className="day-heading">Семестр {term}</h3>
+        {grades.filter((grade) => grade.term === term).map((grade) => {
+          const type = meta(grade);
+          return <div className="grade-history-row" key={grade.id}>
+            <span className="grade-history-title">{grade.title}</span>
+            <span className={"pill " + type.className}>{type.label}</span>
+            <strong>{finalGradeLabel(grade)}</strong>
+          </div>;
+        })}
+      </div>)}
+    </section>}
+  </div>;
 }
 
 function Services({ demo, requests }: { demo: boolean; requests: DashboardData["requests"] }) {

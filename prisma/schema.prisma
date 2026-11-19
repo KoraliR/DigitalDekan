@@ -45,6 +45,12 @@ enum Funding {
   CONTRACT
 }
 
+enum AssessmentType {
+  EXAM
+  TEST
+  COURSEWORK
+}
+
 model User {
   id             String           @id @default(cuid())
   login          String           @unique
@@ -95,13 +101,16 @@ model Attendance {
 }
 
 model Grade {
-  id        String @id @default(cuid())
-  userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title     String
-  score     Int
-  threshold Int
-  term      Int
+  id         String          @id @default(cuid())
+  userId     String
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String
+  score      Int
+  threshold  Int
+  term       Int
+  assessment AssessmentType?
+  finalGrade Int?
+  passed     Boolean?
 
   @@unique([userId, title, term])
 }

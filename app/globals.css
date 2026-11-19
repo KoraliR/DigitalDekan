@@ -99,6 +99,14 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
 .grade progress::-webkit-progress-bar { background: var(--soft); }
 .grade progress::-webkit-progress-value { background: var(--accent); border-radius: 20px; }
 .grade progress::-moz-progress-bar { background: var(--accent); border-radius: 20px; }
+.grade h3 .pill { margin-left: 6px; vertical-align: middle; }
+.grade-final-label { margin-top: 6px; color: var(--muted); font-size: 12px; }
+.grade-final-label strong { color: var(--accent-ink); }
+.grade-history { margin-top: 12px; }
+.grade-history-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.grade-history-row:last-child { border-bottom: 0; padding-bottom: 2px; }
+.grade-history-title { margin-right: auto; font-weight: 800; overflow-wrap: anywhere; }
+.grade-history-row strong { color: var(--accent-ink); white-space: nowrap; }
 .service-list { margin-top: 12px; display: grid; gap: 8px; }
 .service-item { display: flex; align-items: center; text-align: left; gap: 9px; border: 1px solid var(--line); padding: 7px 10px; border-radius: 11px; background: var(--bg); }
 .request-row { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 13px 0; border-bottom: 1px solid var(--line); }
