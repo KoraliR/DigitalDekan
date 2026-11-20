@@ -9,7 +9,7 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
   const tab = validTab((await params).tab);
   const { room } = await searchParams;
   const [lessons, grades, deadlines, requests, news, groupLessons, notifications, attendance] = await Promise.all([
-    db.lesson.findMany({ where: { userId: user.id }, orderBy: { startsAt: "asc" } }),
+    tab === "today" || tab === "map" ? db.lesson.findMany({ where: { userId: user.id }, orderBy: { startsAt: "asc" } }) : [],
     tab === "grades" ? db.grade.findMany({ where: { userId: user.id }, orderBy: { term: "desc" } }) : [],
     tab === "today" || tab === "calendar" ? db.deadline.findMany({ where: { userId: user.id }, orderBy: { dueAt: "asc" } }) : [],
     tab === "services" ? db.serviceRequest.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }) : [],
@@ -38,10 +38,10 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
     room: lesson.room,
     type: lesson.type,
     groups: [lesson.group.name],
-    campus: null,
-    teachers: [],
-    originalStartsAt: null,
-    originalEndsAt: null,
+    campus: lesson.campus ?? null,
+    teachers: (lesson.teachers as { name: string; position?: string }[] | null) ?? [],
+    originalStartsAt: lesson.originalStartsAt?.toISOString() ?? null,
+    originalEndsAt: lesson.originalEndsAt?.toISOString() ?? null,
     attendance: null,
     startsAt: lesson.startsAt.toISOString(),
     endsAt: lesson.endsAt.toISOString(),
@@ -61,6 +61,9 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
       createdAt: request.createdAt.toISOString(),
       updatedAt: (request.updatedAt ?? request.createdAt).toISOString(),
     })),
-    news: [...notifications, ...news].sort((left, right) => +right.createdAt - +left.createdAt).map(({ id, title, body }) => ({ id, title, body })),
+    news: [
+      ...notifications.map((item) => ({ id: item.id, title: item.title, body: item.body, readAt: item.readAt?.toISOString() ?? null, at: +item.createdAt })),
+      ...news.map((item) => ({ id: item.id, title: item.title, body: item.body, readAt: undefined as string | undefined, at: +item.createdAt })),
+    ].sort((left, right) => right.at - left.at).map(({ id, title, body, readAt }) => ({ id, title, body, readAt })),
   }} />;
 }

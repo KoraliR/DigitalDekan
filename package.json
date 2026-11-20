@@ -1,6 +1,9 @@
 {
   "name": "digital-dean",
   "private": true,
+  "engines": {
+    "node": ">=20.9"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -8,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:deploy": "prisma migrate deploy",
-    "db:user": "node --env-file=.env scripts/create-user.mjs"
+    "db:user": "node --env-file=.env scripts/create-user.mjs",
+    "db:seed": "node --env-file=.env scripts/seed-demo.mjs",
+    "db:demo": "node --env-file=.env scripts/create-demo.mjs"
   },
   "dependencies": {
     "next": "^16",

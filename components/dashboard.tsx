@@ -2,14 +2,15 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
-  ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, ChevronLeft, ChevronRight,
+  ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, CalendarPlus, CheckCheck, ChevronLeft, ChevronRight,
   CircleHelp, Clock3, Coffee, FileText, GraduationCap, Info, LogOut, Map, MapPin, Megaphone, Menu,
   Route, Shield, UserRound, X, type LucideIcon,
 } from "lucide-react";
-import { apply, logout } from "@/app/actions";
+import { apply, logout, markNotificationsRead } from "@/app/actions";
 import { campusDay, dateLabel, daysBetween, finalGradeLabel, assessments, plusDays, requestStatusClass, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
 import type { Tab } from "@/lib/tabs";
 import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme";
 import { Campus } from "./campus";
 import { DeadlineCalendar, SchedulePicker } from "./calendar";
@@ -38,7 +39,7 @@ function countLabel(count: number, forms: [string, string, string]) {
   return count + " " + forms[rule === "one" ? 0 : rule === "few" ? 1 : 2];
 }
 
-function Schedule({ day, lessons, deadlines, mapUrl }: { day: string; lessons: DashboardData["lessons"]; deadlines: DashboardData["deadlines"]; mapUrl: string }) {
+function Schedule({ day, lessons, deadlines, mapUrl, icsUrl }: { day: string; lessons: DashboardData["lessons"]; deadlines: DashboardData["deadlines"]; mapUrl: string; icsUrl?: string }) {
   const [weekly, setWeekly] = useState(false);
   const [dayOffset, setDayOffset] = useState(0);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -59,9 +60,10 @@ function Schedule({ day, lessons, deadlines, mapUrl }: { day: string; lessons: D
       <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><CalendarDays size={21} /></span><div><h2>Расписание</h2><p className="muted">{subtitle}</p></div></div>
         <div className="segmented" aria-label="Период расписания">
           <button aria-pressed={!weekly} onClick={() => setWeekly(false)}>День</button>
-          <button aria-pressed={weekly} onClick={() => setWeekly(true)}>Неделя</button>
+          <button aria-pressed={weekly} onClick={() => { setWeekOffset(weeksBetween(day, activeKey)); setWeekly(true); }}>Неделя</button>
         </div>
       </div>
+      {icsUrl && <div className="top-actions"><a className="button button-secondary" href={icsUrl} download><CalendarPlus size={16} /> В календарь</a></div>}
       <div className="week-controls"><Button variant="icon" aria-label={weekly ? "Предыдущая неделя" : "Предыдущий день"} onClick={() => shift(-1)}><ChevronLeft size={18} /></Button>
         <SchedulePicker mode={weekly ? "week" : "day"} value={active} today={day}
           onPick={(date) => { if (weekly) setWeekOffset(weeksBetween(day, campusDay(date))); else setDayOffset(daysBetween(day, campusDay(date))); }} />
@@ -79,9 +81,9 @@ function Schedule({ day, lessons, deadlines, mapUrl }: { day: string; lessons: D
             return <div key={lesson.id}>
               {gap > 0 && <div className="break"><Coffee size={14} /> Перерыв <span>{timeLabel(new Date(previous.endsAt))}–{timeLabel(start)} · {gap} мин</span></div>}
               <button type="button" className="lesson lesson-card" aria-haspopup="dialog" onClick={(event) => { lastCard.current = event.currentTarget; setOpenedId(lesson.id); }}>
-                <div className="lesson-top"><span><Clock3 size={14} /> {timeLabel(start)} — {timeLabel(end)}</span><LessonTypeBadge type={lesson.type} /></div>
-                <h3>{lesson.title}</h3>
-                <div className="lesson-meta"><span><MapPin size={15} /> Ауд. {lesson.room || "—"}</span><span><UserRound size={15} /> {lesson.teacher}</span></div>
+                <span className="lesson-top"><span><Clock3 size={14} /> {timeLabel(start)} — {timeLabel(end)}</span><LessonTypeBadge type={lesson.type} /></span>
+                <span className="lesson-title" role="heading" aria-level={3}>{lesson.title}</span>
+                <span className="lesson-meta"><span><MapPin size={15} /> Ауд. {lesson.room || "—"}</span><span><UserRound size={15} /> {lesson.teacher}</span></span>
               </button>
             </div>;
           })}
@@ -93,7 +95,7 @@ function Schedule({ day, lessons, deadlines, mapUrl }: { day: string; lessons: D
 }
 
 function Deadlines({ items, day, href }: { items: DashboardData["deadlines"]; day: string; href?: string }) {
-  const future = items.filter((item) => campusDay(new Date(item.dueAt)) >= day);
+  const future = items.filter((item) => campusDay(new Date(item.dueAt)) >= day && !item.completedAt);
   const rows = href ? future.slice(0, 3) : items;
   const tomorrow = campusDay(plusDays(day, 1));
   return <section className="panel deadlines">
@@ -101,17 +103,20 @@ function Deadlines({ items, day, href }: { items: DashboardData["deadlines"]; da
     {rows.length ? <ul className="deadline-list">{rows.map((item) => {
       const date = new Date(item.dueAt);
       const key = campusDay(date);
-      return <li key={item.id}><span className={"dot" + (key <= tomorrow ? " urgent" : "")} /><div><h3>{item.title}</h3><p className="muted">{item.course}</p></div>
-        <span className={"deadline-date" + (key <= tomorrow ? " urgent-text" : "")}>{key === day ? "Сегодня" : key === tomorrow ? "Завтра" : dateLabel(date)}{!href && <small>{timeLabel(date)}</small>}</span></li>;
+      const done = Boolean(item.completedAt);
+      return <li className={done ? "done" : undefined} key={item.id}><span className={"dot" + (done ? " done" : key <= tomorrow ? " urgent" : "")} /><div><h3>{item.title}</h3><p className="muted">{item.course}</p></div>
+        <span className={"deadline-date" + (done ? "" : key <= tomorrow ? " urgent-text" : "")}>{done ? "Выполнено" : key === day ? "Сегодня" : key === tomorrow ? "Завтра" : dateLabel(date)}{!done && !href && <small>{timeLabel(date)}</small>}</span></li>;
     })}</ul> : <Empty>Дедлайнов пока нет</Empty>}
     {href && <Link className="text-link" href={href}>Открыть календарь <ArrowRight size={16} /></Link>}
   </section>;
 }
 
 function News({ items }: { items: DashboardData["news"] }) {
+  const unread = items.filter((item) => item.readAt === null).length;
   return <section className="panel news">
-    <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><Megaphone size={20} /></span><div><h2>Уведомления и новости</h2><p className="muted">Объявления учебного офиса</p></div></div></div>
-    {items.length ? <div className="news-list">{items.map((item) => <article key={item.id}><h3>{item.title}</h3><p className="muted message-body">{item.body}</p></article>)}</div> : <Empty>Новостей пока нет</Empty>}
+    <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><Megaphone size={20} /></span><div><h2>Уведомления и новости</h2><p className="muted">{unread ? unread + " новых" : "Объявления учебного офиса"}</p></div></div>
+      {unread > 0 && <form action={markNotificationsRead}><Button variant="secondary" aria-label="Отметить прочитанными"><CheckCheck size={16} /> Отметить прочитанными</Button></form>}</div>
+    {items.length ? <div className="news-list">{items.map((item) => <article key={item.id} className={item.readAt === null ? "unread" : undefined}><h3>{item.title}{item.readAt === null && <span className="unread-dot" aria-label="Новое" />}</h3><p className="muted message-body">{item.body}</p></article>)}</div> : <Empty>Новостей пока нет</Empty>}
   </section>;
 }
 
@@ -122,7 +127,9 @@ function Grades({ grades }: { grades: DashboardData["grades"] }) {
   const rows = all ? grades : grades.filter((grade) => String(grade.term) === view);
   const currentTerm = terms[0] ?? 0;
   const pastTerms = terms.filter((term) => term < currentTerm);
-  const meta = (grade: DashboardData["grades"][number]) => assessments[grade.assessment ?? "EXAM"];
+  const meta = (grade: DashboardData["grades"][number]) => (grade.assessment ? assessments[grade.assessment] : null);
+  const graded = grades.filter((grade) => pastTerms.includes(grade.term) && grade.assessment !== "TEST" && grade.finalGrade !== null && grade.finalGrade >= 2 && grade.finalGrade <= 5);
+  const average = graded.length ? (graded.reduce((sum, grade) => sum + (grade.finalGrade ?? 0), 0) / graded.length).toFixed(1) : null;
   return <div className="content-stack">
     <section className="panel">
       <div className="section-head"><div><h2>Дисциплины</h2><p className="muted">{grades.length ? (all ? "Все семестры" : "Семестр " + view) + " · " + countLabel(rows.length, ["дисциплина", "дисциплины", "дисциплин"]) : "Баллы по дисциплинам"}</p></div>
@@ -135,7 +142,7 @@ function Grades({ grades }: { grades: DashboardData["grades"] }) {
         const left = Math.max(0, grade.threshold - grade.score);
         const type = meta(grade);
         return <article className="grade" key={grade.id}>
-          <div><h3>{grade.title} <span className={"pill " + type.className}>{type.label}</span></h3><strong>{grade.score} / {grade.threshold}</strong></div>
+          <div><h3>{grade.title} {type && <span className={"pill " + type.className}>{type.label}</span>}</h3><strong>{grade.score} / {grade.threshold}</strong></div>
           <progress aria-label={grade.title} max={Math.max(1, grade.threshold)} value={Math.max(0, Math.min(grade.score, grade.threshold))} />
           <p className="muted">{left ? "До порога " + left + " балл." : "Порог достигнут"}{all && " · Семестр " + grade.term}</p>
           <p className="grade-final-label">Итог: <strong>{finalGradeLabel(grade)}</strong></p>
@@ -143,14 +150,14 @@ function Grades({ grades }: { grades: DashboardData["grades"] }) {
       })}
     </section>
     {pastTerms.length > 0 && <section className="panel" aria-labelledby="grade-history-title">
-      <div className="section-head"><div><h2 id="grade-history-title">Итоги прошлых семестров</h2><p className="muted">Вид аттестации и итоговая оценка</p></div></div>
+      <div className="section-head"><div><h2 id="grade-history-title">Итоги прошлых семестров</h2><p className="muted">Вид аттестации и итоговая оценка{average ? " · средний балл " + average : ""}</p></div></div>
       {pastTerms.map((term) => <div key={term} className="grade-history">
         <h3 className="day-heading">Семестр {term}</h3>
         {grades.filter((grade) => grade.term === term).map((grade) => {
           const type = meta(grade);
           return <div className="grade-history-row" key={grade.id}>
             <span className="grade-history-title">{grade.title}</span>
-            <span className={"pill " + type.className}>{type.label}</span>
+            {type && <span className={"pill " + type.className}>{type.label}</span>}
             <strong>{finalGradeLabel(grade)}</strong>
           </div>;
         })}
@@ -212,17 +219,20 @@ function Services({ demo, requests }: { demo: boolean; requests: DashboardData["
       {!choice && error && <p className="form-error" role="alert">{error}</p>}
       {rows.length === 0 && <Empty>Заявок пока нет</Empty>}
       {rows.map((request) => <button type="button" className="request-row request-card" key={request.id} aria-haspopup="dialog" onClick={(event) => { lastRequest.current = event.currentTarget; setOpenedId(request.id); }}>
-        <div><h3>{services[request.type]}</h3><p className="muted">{dateLabel(new Date(request.createdAt))}</p></div>
+        <span className="request-main"><span className="request-title" role="heading" aria-level={3}>{services[request.type]}</span><span className="muted">{request.number} · {dateLabel(new Date(request.createdAt))}</span></span>
         <span className={"pill " + requestStatusClass[request.status]}>{statuses[request.status]}</span>
         {(request.comment || request.readyBy) && <span className="request-note message-body">{request.comment}{request.readyBy && <><br />Срок готовности: {dateLabel(new Date(request.readyBy))}</>}</span>}
         <ChevronRight size={18} />
       </button>)}
     </section>
-    {choice && <dialog ref={(node) => { if (node && !node.open) node.showModal(); }} className="confirm-dialog" aria-labelledby="confirm-title" onCancel={(event) => { event.preventDefault(); if (!pending) setChoice(undefined); }}><div className="panel">
-      <h2 id="confirm-title">{services[choice]}</h2><p className="muted">Заявка появится в списке со статусом «Новая».</p>
-      {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="dialog-actions"><Button variant="secondary" disabled={pending} onClick={() => setChoice(undefined)}>Отмена</Button><Button autoFocus disabled={pending} onClick={() => submit(choice)}>{pending ? "Отправляем…" : "Подать заявку"}</Button></div>
-    </div></dialog>}
+    {choice && <Sheet id="request-confirm" labelledBy="confirm-title" onClose={() => { if (!pending) setChoice(undefined); }}>
+      <div className="panel sheet-panel">
+        <div className="sheet-head"><h2 id="confirm-title">{services[choice]}</h2></div>
+        <p className="muted">Заявка появится в списке со статусом «Новая».</p>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        <div className="dialog-actions"><Button variant="secondary" disabled={pending} onClick={() => setChoice(undefined)}>Отмена</Button><Button autoFocus disabled={pending} onClick={() => submit(choice)}>{pending ? "Отправляем…" : "Подать заявку"}</Button></div>
+      </div>
+    </Sheet>}
     {opened && <RequestDialog request={opened} onClose={() => setOpenedId(null)} />}
   </div>;
 }
@@ -234,7 +244,7 @@ export function Dashboard({ tab, day, data, role, name, demo = false, initialRoo
   const [selectedDay, setSelectedDay] = useState("");
   const base = demo ? "/demo/" : "/cabinet/";
   const nav = (className: string) => <nav className={className} aria-label="Основные разделы">{navigation.filter((item) => !(demo && item.id === "profile")).map(({ id, title, icon: Icon }) =>
-    <Link key={id} href={id === "services" && role === "STAFF" ? "/staff" : base + id} aria-current={tab === id ? "page" : undefined}><Icon size={21} /><span>{title}</span></Link>)}</nav>;
+    <Link key={id} href={base + id} aria-current={tab === id ? "page" : undefined}><Icon size={21} /><span>{title}</span></Link>)}</nav>;
   const title = { today: "Сегодня", grades: "Успеваемость", services: "Сервисы деканата", map: "Карта кампуса", calendar: "Календарь дедлайнов", profile: "Профиль" }[tab];
 
   return <div className="app-shell">
@@ -263,7 +273,7 @@ export function Dashboard({ tab, day, data, role, name, demo = false, initialRoo
       </section> : <div className="page-heading"><h1>{title}</h1></div>}
       {tab === "today" && <div className="content-stack">
         <div className="dashboard-grid">
-          <Schedule lessons={data.lessons} deadlines={data.deadlines} day={day} mapUrl={base + "map"} />
+          <Schedule lessons={data.lessons} deadlines={data.deadlines} day={day} mapUrl={base + "map"} icsUrl={demo ? undefined : "/api/schedule"} />
           <div className="content-stack"><Deadlines items={data.deadlines} day={day} href={base + "calendar"} />
             <Link className="panel route-link" href={base + "map"}><span className="soft-icon"><Route size={22} /></span><div><h2>Найти аудиторию</h2><p className="muted">Маршрут по кампусу</p></div><ArrowDownRight size={19} /></Link>
           </div>

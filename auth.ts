@@ -13,6 +13,7 @@ declare module "next-auth" {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   pages: { signIn: "/login" },
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
+  trustHost: true,
   providers: [Credentials({
     credentials: { challenge: {}, code: {} },
     async authorize({ challenge, code }) {

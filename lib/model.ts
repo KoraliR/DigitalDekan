@@ -4,9 +4,9 @@ export const services: Record<RequestType, string> = {
   MILITARY: "Справка для военкомата",
   APPOINTMENT: "Вызов в деканат",
 };
-export const statuses: Record<RequestStatus, string> = { NEW: "Новая", PROCESSING: "В работе", READY: "Готово", REJECTED: "Отклонена" };
+export const statuses: Record<RequestStatus, string> = { NEW: "Новая", PROCESSING: "В работе", READY: "Готово", REJECTED: "Отклонена", CANCELLED: "Отменена" };
 export const requestTypeClass: Record<RequestType, string> = { STUDY: "info", MILITARY: "info", APPOINTMENT: "warn" };
-export const requestStatusClass: Record<RequestStatus, string> = { NEW: "info", PROCESSING: "warn", READY: "done", REJECTED: "absent" };
+export const requestStatusClass: Record<RequestStatus, string> = { NEW: "info", PROCESSING: "warn", READY: "done", REJECTED: "absent", CANCELLED: "not-marked" };
 export interface RequestView {
   id: string;
   number: string;
@@ -42,7 +42,7 @@ export function finalGradeLabel(grade: { assessment: AssessmentType | null; fina
     if (grade.passed === null) return "—";
     return grade.passed ? "Зачтено" : "Не зачтено";
   }
-  if (grade.finalGrade === null) return "—";
+  if (grade.finalGrade === null || grade.finalGrade < 2 || grade.finalGrade > 5) return "—";
   return grade.finalGrade + " · " + (gradeWords[grade.finalGrade] ?? "");
 }
 export interface LessonTeacher {
@@ -100,5 +100,5 @@ export interface DashboardData {
   grades: { id: string; title: string; score: number; threshold: number; term: number; assessment: AssessmentType | null; finalGrade: number | null; passed: boolean | null }[];
   deadlines: DeadlineView[];
   requests: RequestView[];
-  news: { id: string; title: string; body: string }[];
+  news: { id: string; title: string; body: string; readAt?: string | null }[];
 }

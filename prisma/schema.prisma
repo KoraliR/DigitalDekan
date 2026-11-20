@@ -23,6 +23,7 @@ enum RequestStatus {
   PROCESSING
   READY
   REJECTED
+  CANCELLED
 }
 
 enum LessonType {
@@ -174,26 +175,31 @@ model StudyGroup {
 }
 
 model GroupLesson {
-  groupId  String
-  group    StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  id       String     @id @default(cuid())
-  title    String
-  teacher  String
-  room     String
-  type     LessonType
-  startsAt DateTime
-  endsAt   DateTime
+  groupId          String
+  group            StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id               String     @id @default(cuid())
+  title            String
+  teacher          String
+  room             String
+  type             LessonType
+  campus           String?
+  teachers         Json?
+  originalStartsAt DateTime?
+  originalEndsAt   DateTime?
+  startsAt         DateTime
+  endsAt           DateTime
 
   @@index([groupId, startsAt])
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   body      String
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
 
   @@index([userId, createdAt])
 }

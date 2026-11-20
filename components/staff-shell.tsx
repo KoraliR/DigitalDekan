@@ -1,14 +1,17 @@
 import Link from "next/link";
-import { CalendarDays, ClipboardList, GraduationCap, History, LayoutDashboard, Megaphone } from "lucide-react";
+import { CalendarDays, CalendarClock, ClipboardList, GraduationCap, History, LayoutDashboard, Megaphone, UserCheck } from "lucide-react";
 import { logout } from "@/app/actions";
 import { ThemeToggle } from "@/components/theme";
 import { Button } from "@/components/ui/button";
+import { PasswordDialog } from "@/components/password-dialog";
 
 const tabs = [
   { id: "overview", label: "Обзор", icon: LayoutDashboard },
   { id: "requests", label: "Заявки", icon: ClipboardList },
   { id: "news", label: "Новости", icon: Megaphone },
   { id: "schedule", label: "Пары", icon: CalendarDays },
+  { id: "attendance", label: "Посещение", icon: UserCheck },
+  { id: "deadlines", label: "Дедлайны", icon: CalendarClock },
   { id: "grades", label: "Оценки", icon: GraduationCap },
   { id: "audit", label: "Аудит", icon: History },
 ];
@@ -17,7 +20,7 @@ export function StaffShell({ name, section, children }: { name: string; section:
   return <main className="workspace staff-workspace">
     <header className="section-head">
       <div><p className="muted">{name} · Сотрудник деканата</p><h1>Кабинет сотрудника</h1></div>
-      <div className="top-actions"><ThemeToggle /><form action={logout}><Button variant="secondary">Выйти</Button></form></div>
+      <div className="top-actions"><ThemeToggle /><PasswordDialog /><form action={logout}><Button variant="secondary">Выйти</Button></form></div>
     </header>
     <p className="notice">Концепт для конкурса. Не является официальным сервисом вуза</p>
     <nav className="staff-nav" aria-label="Служебные разделы">

@@ -1,14 +1,30 @@
 import { NextResponse } from "next/server";
 import { compare, hash } from "bcryptjs";
 import { db } from "@/lib/db";
-import { studentSession } from "@/lib/api";
+import { anySession } from "@/lib/api";
 import { passwordError } from "@/lib/password.mjs";
+
+const attempts = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimited(accountId: string) {
+  const now = Date.now();
+  const entry = attempts.get(accountId);
+  if (!entry || entry.resetAt < now) {
+    attempts.set(accountId, { count: 1, resetAt: now + 10 * 60_000 });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > 10;
+}
 
 const bad = (error: string) => NextResponse.json({ error }, { status: 400 });
 
 export async function POST(request: Request) {
-  const session = await studentSession();
+  const session = await anySession();
   if ("response" in session) return session.response;
+  if (rateLimited(session.accountId)) {
+    return NextResponse.json({ error: "Слишком много попыток. Попробуйте позже." }, { status: 429 });
+  }
 
   let payload: unknown;
   try { payload = await request.json(); } catch { return bad("Некорректный запрос."); }
@@ -31,6 +47,7 @@ export async function POST(request: Request) {
     db.user.update({ where: { id: session.accountId }, data: { passwordHash: await hash(next, 12) } }),
     db.loginChallenge.deleteMany({ where: { userId: session.accountId } }),
   ]);
+  attempts.delete(session.accountId);
 
   return NextResponse.json({ ok: true });
 }

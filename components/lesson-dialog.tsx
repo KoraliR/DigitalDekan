@@ -20,7 +20,8 @@ export function LessonDialog({ lesson, deadlines, mapUrl, onClose }: {
 }) {
   const start = new Date(lesson.startsAt);
   const end = new Date(lesson.endsAt);
-  const changed = Boolean(lesson.originalStartsAt && lesson.originalStartsAt !== lesson.startsAt);
+  const changed = Boolean((lesson.originalStartsAt && lesson.originalStartsAt !== lesson.startsAt) ||
+    (lesson.originalEndsAt && lesson.originalEndsAt !== lesson.endsAt));
   const related = deadlines.filter((deadline) => deadline.lessonId === lesson.id);
   const teachers = lesson.teachers.length ? lesson.teachers : [{ name: lesson.teacher }];
 

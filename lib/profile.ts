@@ -40,9 +40,10 @@ export function fundingLabel(funding: Funding | null) {
 }
 
 export async function profileFor(userId: string): Promise<ProfileDTO | null> {
-  const user = await db.user.findUnique({ where: { id: userId }, include: { studentProfile: true } });
+  const user = await db.user.findUnique({ where: { id: userId }, include: { studentProfile: { include: { group: true } } } });
   if (!user) return null;
   const profile = user.studentProfile;
+  const group = profile?.group;
   return {
     id: user.id,
     name: user.name,
@@ -51,12 +52,12 @@ export async function profileFor(userId: string): Promise<ProfileDTO | null> {
     age: profile?.birthDate ? ageFrom(profile.birthDate) : null,
     studentId: profile?.studentId ?? null,
     institute: profile?.institute ?? null,
-    faculty: profile?.faculty ?? null,
+    faculty: group?.faculty ?? profile?.faculty ?? null,
     department: profile?.department ?? null,
     programCode: profile?.programCode ?? null,
     programName: profile?.programName ?? null,
-    course: profile?.course ?? null,
-    groupName: profile?.groupName ?? null,
+    course: group?.course ?? profile?.course ?? null,
+    groupName: group?.name ?? profile?.groupName ?? null,
     funding: profile?.funding ?? null,
     phone: profile?.phone ?? null,
     contactEmail: profile?.contactEmail ?? null,

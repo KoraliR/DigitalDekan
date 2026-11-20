@@ -1,15 +1,19 @@
 "use client";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Download, X } from "lucide-react";
+import { cancelRequest } from "@/app/actions";
 import { dateLabel, timeLabel, requestTypeClass, requestStatusClass, services, statuses, type RequestView } from "@/lib/model";
 import { Sheet } from "@/components/ui/sheet";
 
 export function RequestDialog({ request, onClose }: { request: RequestView; onClose: () => void }) {
   const isDocument = request.type === "STUDY" || request.type === "MILITARY";
   const ready = request.status === "READY";
+  const canCancel = request.status === "NEW" || request.status === "PROCESSING";
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState("");
+  const [cancelError, setCancelError] = useState("");
+  const [cancelling, startCancel] = useTransition();
 
   async function download() {
     setDownloading(true);
@@ -59,6 +63,14 @@ export function RequestDialog({ request, onClose }: { request: RequestView; onCl
           <Download size={16} /> {downloading ? "Скачиваем…" : "Скачать справку"}
         </button>
         {downloadError && <p className="form-error" role="alert">{downloadError}</p>}
+      </div>}
+
+      {canCancel && <div className="sheet-actions">
+        <button type="button" className="button button-secondary" disabled={cancelling} onClick={() => startCancel(async () => {
+          const result = await cancelRequest(request.id);
+          if (result?.error) setCancelError(result.error); else onClose();
+        })}>{cancelling ? "Отменяем…" : "Отменить заявку"}</button>
+        {cancelError && <p className="form-error" role="alert">{cancelError}</p>}
       </div>}
     </div>
   </Sheet>;

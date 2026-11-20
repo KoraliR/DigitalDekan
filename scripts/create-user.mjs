@@ -4,9 +4,11 @@ import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
 import { passwordError } from "../lib/password.mjs";
 
-const [role, login, ...name] = process.argv.slice(2);
+const raw = process.argv.slice(2);
+const groupName = raw.find((value) => value.startsWith("--group="))?.slice("--group=".length);
+const [role, login, ...name] = raw.filter((value) => !value.startsWith("--group="));
 if (!["STUDENT", "STAFF"].includes(role) || !login || login.length > 80 || !name.length) {
-  console.error("npm run db:user -- STUDENT student Имя Фамилия");
+  console.error("npm run db:user -- STUDENT student Имя Фамилия [--group=ИВТ-21-1]");
   process.exit(1);
 }
 if (!process.stdin.isTTY) throw new Error("Для безопасного ввода пароля нужен интерактивный терминал.");
@@ -20,11 +22,23 @@ const issue = passwordError(password);
 if (issue) throw new Error(issue);
 const db = new PrismaClient();
 try {
-  await db.user.create({ data: {
+  const user = await db.user.create({ data: {
     login: login.trim().toLowerCase(), name: name.join(" "), role, passwordHash: await hash(password, 12),
     ...(role === "STUDENT" ? { studentProfile: { create: {} } } : { staffProfile: { create: {} } }),
   } });
-  console.log("Учётная запись создана.");
+  if (groupName) {
+    const group = await db.studyGroup.upsert({
+      where: { name: groupName },
+      update: {},
+      create: { name: groupName, faculty: "Не указан", course: 1 },
+    });
+    if (role === "STUDENT") {
+      await db.studentProfile.update({ where: { userId: user.id }, data: { groupId: group.id, groupName: group.name } });
+    } else {
+      await db.staffProfile.update({ where: { userId: user.id }, data: { groups: { connect: { id: group.id } } } });
+    }
+  }
+  console.log("Учётная запись создана." + (groupName ? " Группа: " + groupName : ""));
 } finally {
   await db.$disconnect();
 }

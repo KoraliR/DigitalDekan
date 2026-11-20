@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dekanat
+      POSTGRES_PASSWORD: dekanat
+      POSTGRES_DB: dekanat
+    ports:
+      - "5432:5432"
+    volumes:
+      - dekanat-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dekanat -d dekanat"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://dekanat:dekanat@db:5432/dekanat?schema=public
+      AUTH_URL: http://localhost:3000
+      AUTH_SECRET: change-me-in-production
+      DEMO_2FA_ENABLED: "true"
+    ports:
+      - "3000:3000"
+    command: sh -c "npx prisma migrate deploy && npx next start -p 3000"
+
+volumes:
+  dekanat-db:

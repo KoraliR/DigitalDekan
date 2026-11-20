@@ -18,7 +18,7 @@ export function Campus({ lessons, initialRoom = "" }: { lessons: DashboardData["
   const [room, setRoom] = useState(initialRoom || (lessons.find((lesson) => mapped(lesson.room))?.room ?? "204"));
   const destination = mapped(room) ? rooms[room] : undefined;
   const [floor, setFloor] = useState(destination?.floor ?? 1);
-  const options = [...new Set([room, ...lessons.map((lesson) => lesson.room), ...Object.keys(rooms)])];
+  const options = [...new Set([room, ...lessons.map((lesson) => lesson.room).filter(Boolean), ...Object.keys(rooms)])];
   const sameFloor = floor === destination?.floor;
   const route = destination && (floor === 1 || sameFloor);
   const points = !route ? "" : floor === 1
