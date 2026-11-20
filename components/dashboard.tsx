@@ -237,8 +237,8 @@ function Services({ demo, requests }: { demo: boolean; requests: DashboardData["
   </div>;
 }
 
-export function Dashboard({ tab, day, data, role, name, demo = false, initialRoom }: {
-  tab: Tab; day: string; data: DashboardData; role: "STUDENT" | "STAFF"; name: string; demo?: boolean; initialRoom?: string;
+export function Dashboard({ tab, day, data, role, name, monitor = false, demo = false, initialRoom }: {
+  tab: Tab; day: string; data: DashboardData; role: "STUDENT" | "STAFF"; name: string; monitor?: boolean; demo?: boolean; initialRoom?: string;
 }) {
   const [menu, setMenu] = useState(false);
   const [selectedDay, setSelectedDay] = useState("");
@@ -260,7 +260,7 @@ export function Dashboard({ tab, day, data, role, name, demo = false, initialRoo
       <div className="top-actions"><ThemeToggle /><div className="menu-anchor"><Button type="button" variant="icon" aria-label={menu ? "Закрыть меню" : "Открыть меню"} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X size={21} /> : <Menu size={21} />}</Button>
       {menu && <div className="panel account-menu" onKeyDown={(event) => { if (event.key === "Escape") setMenu(false); }}>
         <strong>{name}</strong><p className="muted">{role === "STAFF" ? "Сотрудник деканата" : "Студент"}</p>
-        <div className="theme-setting">Тема интерфейса <ThemeToggle /></div>
+        {monitor && <Link className="text-link" href="/attendance">Журнал старосты</Link>}<div className="theme-setting">Тема интерфейса <ThemeToggle /></div>
         {demo ? <Link className="text-link" href="/login"><Shield size={16} /> Вход с учётной записью</Link> :
           <form action={logout}><Button variant="secondary"><LogOut size={16} /> Выйти</Button></form>}
       </div>}</div></div>

@@ -28,7 +28,7 @@ export function LessonDialog({ lesson, deadlines, mapUrl, onClose }: {
   return <Sheet id="lesson-dialog" labelledBy="lesson-title" onClose={onClose}>
     <div className="panel sheet-panel">
       <div className="sheet-head">
-        <div><LessonTypeBadge type={lesson.type} /><h2 id="lesson-title">{lesson.title}</h2></div>
+        <div><LessonTypeBadge type={lesson.type} /><h2 id="lesson-title">{lesson.title}</h2>{lesson.comment && <section className="notice lesson-comment"><div><h3>Комментарий преподавателя</h3><p className="message-body">{lesson.comment}</p></div></section> }</div>
         <button type="button" className="button button-icon" aria-label="Закрыть" onClick={onClose}><X size={18} /></button>
       </div>
 

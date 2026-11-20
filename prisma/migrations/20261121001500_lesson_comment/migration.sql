@@ -1,0 +1,1 @@
+ALTER TABLE "GroupLesson" ADD COLUMN "comment" TEXT;

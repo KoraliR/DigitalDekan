@@ -14,7 +14,7 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
     tab === "today" || tab === "calendar" ? db.deadline.findMany({ where: { userId: user.id }, orderBy: { dueAt: "asc" } }) : [],
     tab === "services" ? db.serviceRequest.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }) : [],
     tab === "today" || tab === "calendar" ? db.news.findMany({ orderBy: { createdAt: "desc" } }) : [],
-    user.groupId && (tab === "today" || tab === "map") ? db.groupLesson.findMany({ where: { groupId: user.groupId }, include: { group: { select: { name: true } } } }) : [],
+    user.groupId && (tab === "today" || tab === "map") ? db.groupLesson.findMany({ where: { groupId: user.groupId }, include: { group: { select: { name: true } }, marks: { where: { userId: user.id } } } }) : [],
     tab === "today" || tab === "calendar" ? db.notification.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }) : [],
     tab === "today" ? db.attendance.findMany({ where: { userId: user.id } }) : [],
   ]);
@@ -39,15 +39,16 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
     type: lesson.type,
     groups: [lesson.group.name],
     campus: lesson.campus ?? null,
+    comment: lesson.comment,
     teachers: (lesson.teachers as { name: string; position?: string }[] | null) ?? [],
     originalStartsAt: lesson.originalStartsAt?.toISOString() ?? null,
     originalEndsAt: lesson.originalEndsAt?.toISOString() ?? null,
-    attendance: null,
+    attendance: lesson.marks[0]?.status ?? null,
     startsAt: lesson.startsAt.toISOString(),
     endsAt: lesson.endsAt.toISOString(),
   }));
 
-  return <Dashboard initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} data={{
+  return <Dashboard monitor={user.isMonitor} initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} data={{
     lessons: [...ownLessons, ...sharedLessons].sort((left, right) => +new Date(left.startsAt) - +new Date(right.startsAt)),
     grades: grades.map(({ userId, ...grade }) => grade),
     deadlines: deadlines.map(({ userId, ...deadline }) => ({ ...deadline, dueAt: deadline.dueAt.toISOString(), lessonId: deadline.lessonId, completedAt: deadline.completedAt?.toISOString() ?? null })),

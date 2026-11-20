@@ -35,6 +35,23 @@ try {
       create: { login: "demo-staff", name: "Нина Ветрова", role: "STAFF", passwordHash, staffProfile: { create: { groups: { connect: [{ id: first.id }] } } } },
     });
 
+    const roster = [one];
+    for (const [login, name] of [["demo-student-3", "Алиса Янтарная"], ["demo-student-4", "Роман Лунин"]]) {
+      roster.push(await tx.user.upsert({
+        where: { login },
+        update: {},
+        create: { login, name, passwordHash, studentProfile: { create: { groupId: first.id } } },
+      }));
+    }
+    for (const [index, title] of ["Проектирование интерфейсов", "Основы программирования", "Компьютерные сети"].entries()) {
+      const userId = roster[index].id;
+      await tx.grade.upsert({
+        where: { userId_title_term: { userId, title, term: 1 } },
+        update: {},
+        create: { userId, title, term: 1, score: 68 + index * 6, threshold: 60, assessment: "EXAM" },
+      });
+    }
+
     const requests = [
       { userId: one.id, type: "STUDY", number: "З-ДЕМО-0001" },
       { userId: two.id, type: "MILITARY", number: "З-ДЕМО-0002" },

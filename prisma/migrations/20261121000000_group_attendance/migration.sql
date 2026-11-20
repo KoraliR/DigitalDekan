@@ -1,0 +1,12 @@
+ALTER TABLE "StudentProfile" ADD COLUMN "isMonitor" BOOLEAN NOT NULL DEFAULT false;
+CREATE TABLE "GroupAttendance" (
+  "lessonId" TEXT NOT NULL REFERENCES "GroupLesson"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "status" "AttendanceStatus" NOT NULL,
+  PRIMARY KEY ("lessonId", "userId")
+);
+CREATE TABLE "AttendanceQr" (
+  "lessonId" TEXT PRIMARY KEY REFERENCES "GroupLesson"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+  "token" TEXT NOT NULL UNIQUE,
+  "expiresAt" TIMESTAMP(3) NOT NULL
+);

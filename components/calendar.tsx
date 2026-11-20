@@ -51,11 +51,12 @@ function MonthGrid({ month, onShift, cell, gridClass = "" }: {
   </>;
 }
 
-export function DeadlineCalendar({ day, items, selected, onSelect }: {
+export function DeadlineCalendar({ day, items, selected, onSelect, schedule = false }: {
   day: string;
   items: DashboardData["deadlines"];
   selected: string;
   onSelect: (day: string) => void;
+  schedule?: boolean;
 }) {
   const [month, setMonth] = useState(() => new Date(day.slice(0, 7) + "-01T12:00:00Z"));
   const due = new Set(items.filter((item) => !item.completedAt).map((item) => campusDay(new Date(item.dueAt))));
@@ -69,12 +70,12 @@ export function DeadlineCalendar({ day, items, selected, onSelect }: {
       const classes = [due.has(key) ? "has-deadline" : "", done.has(key) ? "is-done" : ""].filter(Boolean).join(" ");
       return {
         className: classes || undefined,
-        label: dateLabel(date) + (due.has(key) ? ", есть дедлайн" : done.has(key) ? ", дедлайн выполнен" : ""),
+        label: dateLabel(date) + (due.has(key) ? (schedule ? ", есть пары" : ", есть дедлайн") : done.has(key) ? ", дедлайн выполнен" : ""),
         pressed: key === selected,
         onClick: () => onSelect(key === selected ? "" : key),
       };
     }} />
-    {selected && <button type="button" className="text-link" onClick={() => onSelect("")}>Показать все контрольные точки</button>}
+    {selected && !schedule && <button type="button" className="text-link" onClick={() => onSelect("")}>Показать все контрольные точки</button>}
   </section>;
 }
 

@@ -21,18 +21,28 @@ function requireInput(condition: unknown, message: string): asserts condition {
 type Operation = (tx: Prisma.TransactionClient, staffId: string, form: FormData) => Promise<void>;
 async function mutate(section: string, form: FormData, operation: Operation) {
   const staff = await account("STAFF");
+  const query = new URLSearchParams({ section });
+  if (section === "schedule") query.set("date", field(form, "startsAt", 16).slice(0, 10));
+  if (section === "grades" && form.get("register") === "1") {
+    query.set("subject", field(form, "title", 120));
+    query.set("term", field(form, "term", 2));
+    query.set("student", field(form, "student", 100));
+    const group = field(form, "group", 100);
+    if (group) query.set("group", group);
+  }
+  const returnTo = "/staff?" + query;
   try {
     await db.$transaction((tx) => operation(tx, staff.id, form));
   } catch (error) {
-    if (error instanceof InputError) redirect("/staff?section=" + section + "&error=" + encodeURIComponent(error.message));
+    if (error instanceof InputError) redirect(returnTo + "&error=" + encodeURIComponent(error.message));
     if (error instanceof Prisma.PrismaClientKnownRequestError && ["P2002", "P2034"].includes(error.code)) {
-      redirect("/staff?section=" + section + "&error=" + encodeURIComponent("Данные изменились. Проверьте и повторите."));
+      redirect(returnTo + "&error=" + encodeURIComponent("Данные изменились. Проверьте и повторите."));
     }
     throw error;
   }
   revalidatePath("/cabinet", "layout");
   revalidatePath("/staff");
-  redirect("/staff?section=" + section + "&saved=1");
+  redirect(returnTo + "&saved=1");
 }
 
 export async function processRequest(form: FormData) {
@@ -109,7 +119,11 @@ export async function saveLesson(form: FormData) {
     const campus = field(input, "campus", 120) || null;
     let groupId = field(input, "group", 100);
     let title = field(input, "title", 120);
+    const rawComment = input.get("comment");
+    requireInput(rawComment === null || (typeof rawComment === "string" && rawComment.trim().length <= 1000), "Комментарий должен содержать до 1000 символов.");
+    const comment = typeof rawComment === "string" ? rawComment.trim() || null : undefined;
     let oldTime = "";
+    let moved = false;
     if (id) {
       const lesson = await tx.groupLesson.findFirst({ where: { id, group: staffGroups(staffId) } });
       if (!lesson) forbidden();
@@ -118,10 +132,11 @@ export async function saveLesson(form: FormData) {
       const type = (typeText as LessonType) || lesson.type;
       const teacher = field(input, "teacher", 100) || lesson.teacher;
       const room = field(input, "room", 30) || lesson.room;
+      moved = +lesson.startsAt !== +startsAt || +lesson.endsAt !== +endsAt;
       oldTime = dateLabel(lesson.startsAt) + ", " + timeLabel(lesson.startsAt);
       const changed = await tx.groupLesson.updateMany({
         where: { id, group: staffGroups(staffId), startsAt: lesson.startsAt, endsAt: lesson.endsAt },
-        data: { startsAt, endsAt, title, type, teacher, room, campus },
+        data: { startsAt, endsAt, title, type, teacher, room, campus, comment },
       });
       requireInput(changed.count, "Занятие уже изменилось.");
     } else {
@@ -130,13 +145,13 @@ export async function saveLesson(form: FormData) {
       const teacher = field(input, "teacher", 100);
       const room = field(input, "room", 30);
       requireInput(title && teacher && room && typeText, "Заполните данные занятия.");
-      await tx.groupLesson.create({ data: { groupId, title, teacher, room, type: typeText as LessonType, campus, startsAt, endsAt } });
+      await tx.groupLesson.create({ data: { groupId, title, teacher, room, type: typeText as LessonType, campus, comment, startsAt, endsAt } });
     }
     const students = await tx.user.findMany({ where: staffStudents(staffId, groupId), select: { id: true } });
     const newTime = dateLabel(startsAt) + ", " + timeLabel(startsAt) + "–" + timeLabel(endsAt);
     if (students.length) await tx.notification.createMany({ data: students.map((student) => ({
-      userId: student.id, title: (id ? "Перенос занятия · " : "Новое занятие · ") + title,
-      body: oldTime && oldTime !== dateLabel(startsAt) + ", " + timeLabel(startsAt) ? oldTime + " → " + newTime : newTime,
+      userId: student.id, title: (moved ? "Перенос занятия · " : id ? "Изменение занятия · " : "Новое занятие · ") + title,
+      body: (moved ? oldTime + " → " + newTime : newTime) + (comment ? "\n" + comment : ""),
     })) });
   });
 }
@@ -185,12 +200,13 @@ export async function saveGrade(form: FormData) {
 export async function saveAttendance(form: FormData) {
   await mutate("attendance", form, async (tx, staffId, input) => {
     const statusText = field(input, "status", 10);
-    requireInput(Object.values(AttendanceStatus).includes(statusText as AttendanceStatus), "Проверьте статус посещения.");
+    requireInput(!statusText || Object.values(AttendanceStatus).includes(statusText as AttendanceStatus), "Проверьте статус посещения.");
     const lesson = await tx.lesson.findFirst({
       where: { id: field(input, "lesson", 100), user: staffStudents(staffId) },
       select: { id: true, userId: true, title: true, startsAt: true, user: { select: { name: true, studentProfile: { select: { groupId: true } } } } },
     });
     if (!lesson) forbidden();
+    if (!statusText) return;
     const status = statusText as AttendanceStatus;
     await tx.attendance.upsert({
       where: { lessonId_userId: { lessonId: lesson.id, userId: lesson.userId } },

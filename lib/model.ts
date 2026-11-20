@@ -50,6 +50,7 @@ export interface LessonTeacher {
   position?: string;
 }
 export interface LessonView {
+  comment?: string | null;
   id: string;
   title: string;
   teacher: string;

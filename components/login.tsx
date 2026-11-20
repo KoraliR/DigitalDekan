@@ -8,7 +8,7 @@ import { ThemeToggle } from "@/components/theme";
 import { Field } from "@/components/ui/field";
 import { PasswordField } from "@/components/ui/password-field";
 
-export function Login({ enabled, staff = false }: { enabled: boolean; staff?: boolean }) {
+export function Login({ enabled, staff = false, next }: { enabled: boolean; staff?: boolean; next?: string }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [pending, run] = useTransition();
@@ -17,7 +17,7 @@ export function Login({ enabled, staff = false }: { enabled: boolean; staff?: bo
     setError("");
     run(async () => {
       try {
-        if (code) { const result = await finishLogin(form); if (result?.url) window.location.assign(result.url); else setError(result?.error ?? ""); }
+        if (code) { const result = await finishLogin(form); if (result?.url) window.location.assign(typeof next === "string" && /^\/attendance\/check\?token=[a-f0-9]{48}$/.test(next) ? next : result.url); else setError(result?.error ?? ""); }
         else {
           const result = await startLogin(form);
           if (result.code) setCode(result.code);

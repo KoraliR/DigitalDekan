@@ -53,11 +53,12 @@ enum AssessmentType {
 }
 
 model User {
-  id             String           @id @default(cuid())
-  login          String           @unique
+  groupMarks     GroupAttendance[]
+  id             String            @id @default(cuid())
+  login          String            @unique
   name           String
   passwordHash   String
-  role           Role             @default(STUDENT)
+  role           Role              @default(STUDENT)
   studentProfile StudentProfile?
   staffProfile   StaffProfile?
   notifications  Notification[]
@@ -175,9 +176,12 @@ model StudyGroup {
 }
 
 model GroupLesson {
+  comment           String?
+  marks            GroupAttendance[]
+  qr               AttendanceQr?
   groupId          String
-  group            StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  id               String     @id @default(cuid())
+  group            StudyGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id               String            @id @default(cuid())
   title            String
   teacher          String
   room             String
@@ -216,6 +220,7 @@ model AuditEntry {
 }
 
 model StudentProfile {
+  isMonitor    Boolean     @default(false)
   userId       String      @id
   user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   groupId      String?
@@ -241,4 +246,21 @@ model StaffProfile {
   userId String       @id
   user   User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   groups StudyGroup[] @relation("ScopedGroups")
+}
+
+model GroupAttendance {
+  lessonId String
+  lesson   GroupLesson      @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status   AttendanceStatus
+
+  @@id([lessonId, userId])
+}
+
+model AttendanceQr {
+  lessonId  String      @id
+  lesson    GroupLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  token     String      @unique
+  expiresAt DateTime
 }
