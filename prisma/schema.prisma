@@ -53,6 +53,14 @@ enum AssessmentType {
 }
 
 model User {
+  campusBookings CampusBooking[]
+  campusSlots    CampusSlot[]
+  bookLoans      CampusLoan[]
+  bookHolds      CampusHold[]
+  boardPosts     CampusPost[]
+  boardReplies   CampusReply[]
+  portfolio      CampusPortfolio[]
+  campusPass     CampusPass?
   groupMarks     GroupAttendance[]
   id             String            @id @default(cuid())
   login          String            @unique
@@ -176,7 +184,7 @@ model StudyGroup {
 }
 
 model GroupLesson {
-  comment           String?
+  comment          String?
   marks            GroupAttendance[]
   qr               AttendanceQr?
   groupId          String
@@ -220,24 +228,25 @@ model AuditEntry {
 }
 
 model StudentProfile {
-  isMonitor    Boolean     @default(false)
-  userId       String      @id
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  groupId      String?
-  group        StudyGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
-  birthDate    DateTime?
-  studentId    String?     @unique
-  institute    String?
-  faculty      String?
-  department   String?
-  programCode  String?
-  programName  String?
-  course       Int?
-  groupName    String?
-  funding      Funding?
-  phone        String?
-  contactEmail String?
-  messengerUrl String?
+  surnameStress Int?
+  isMonitor     Boolean     @default(false)
+  userId        String      @id
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId       String?
+  group         StudyGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  birthDate     DateTime?
+  studentId     String?     @unique
+  institute     String?
+  faculty       String?
+  department    String?
+  programCode   String?
+  programName   String?
+  course        Int?
+  groupName     String?
+  funding       Funding?
+  phone         String?
+  contactEmail  String?
+  messengerUrl  String?
 
   @@index([groupId])
 }
@@ -262,5 +271,118 @@ model AttendanceQr {
   lessonId  String      @id
   lesson    GroupLesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
   token     String      @unique
+  expiresAt DateTime
+}
+
+enum CampusSlotKind {
+  CONSULTATION
+  RETAKE
+  ROOM
+  COWORKING
+  EQUIPMENT
+  SPORT
+}
+
+model CampusSlot {
+  id         String          @id @default(cuid())
+  kind       CampusSlotKind
+  title      String
+  place      String
+  startsAt   DateTime
+  endsAt     DateTime
+  capacity   Int
+  staffId    String?
+  staff      User?           @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  groupId    String?
+  retakeTerm Int?
+  bookings   CampusBooking[]
+
+  @@unique([kind, place, startsAt])
+  @@index([startsAt])
+}
+
+model CampusBooking {
+  slotId   String
+  slot     CampusSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attended Boolean    @default(false)
+
+  @@id([slotId, userId])
+  @@index([userId])
+}
+
+model CampusBook {
+  id     String       @id @default(cuid())
+  title  String       @unique
+  author String
+  loans  CampusLoan[]
+  holds  CampusHold[]
+}
+
+model CampusLoan {
+  bookId  String
+  book    CampusBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dueAt   DateTime
+  renewed Boolean    @default(false)
+
+  @@id([bookId, userId])
+}
+
+model CampusHold {
+  bookId    String
+  book      CampusBook @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+
+  @@id([bookId, userId])
+  @@index([bookId, createdAt])
+}
+
+model CampusPost {
+  id        String        @id @default(cuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  String
+  title     String
+  body      String
+  createdAt DateTime      @default(now())
+  expiresAt DateTime
+  closed    Boolean       @default(false)
+  flagged   Boolean       @default(false)
+  replies   CampusReply[]
+}
+
+model CampusReply {
+  postId String
+  post   CampusPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId String
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  body   String
+
+  @@id([postId, userId])
+}
+
+model CampusPortfolio {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  kind        String
+  description String
+  link        String?
+  occurredAt  DateTime
+  shared      Boolean  @default(false)
+
+  @@index([userId])
+}
+
+model CampusPass {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  digest    String   @unique
   expiresAt DateTime
 }

@@ -1,16 +1,18 @@
+import { displayStudent } from "@/lib/campus-tools";
+import { StaffRequestForm } from "@/components/staff-request-form";
+import { ArrowUpRight, BellRing, CalendarPlus, ChevronRight, Filter, Inbox, Megaphone, Plus, Send } from "lucide-react";
 import QRCode from "qrcode";
 import { StaffCalendar } from "@/components/staff-calendar";
 import { AttendanceCheckbox, GroupRoster } from "@/components/group-roster";
 import { groupAttendance } from "@/app/attendance/actions";
-import { GradeRegister } from "@/components/grade-register";
+import { GradeFields, GradeRegister } from "@/components/grade-register";
 import Link from "next/link";
 import { StaffShell } from "@/components/staff-shell";
 import { RequestStatus, RequestType } from "@prisma/client";
 import { account, staffGroups, staffStudents } from "@/lib/access";
 import { db } from "@/lib/db";
-import { assessments, campusDay, dateLabel, finalGradeLabel, lessonTypes, services, statuses, timeLabel } from "@/lib/model";
-import { transitions } from "@/lib/workflow";
-import { createDeadline, processRequest, publish, saveAttendance, saveGrade, saveLesson } from "./actions";
+import { campusDay, dateLabel, plusDays, finalGradeLabel, lessonTypes, services, statuses, timeLabel } from "@/lib/model";
+import { createDeadline, publish, saveAttendance, saveGrade, saveLesson } from "./actions";
 import { Button } from "@/components/ui/button";
 
 const sections = {
@@ -23,7 +25,6 @@ const sections = {
   grades: "Оценки",
   audit: "Аудит",
 };
-const assessmentOptions = Object.entries(assessments);
 const lessonTypeOptions = Object.entries(lessonTypes);
 const dateTime = (date: Date) => campusDay(date) + "T" + timeLabel(date);
 
@@ -40,19 +41,19 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
   const now = new Date();
   const today = campusDay(now);
   const attendanceDate = typeof params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.date) && Number.isFinite(Date.parse(params.date)) ? params.date : today;
-  const [newCount, overdue, deadlines, requests, lessons, students, audit, attendanceLessons, groupDeadlines] = await Promise.all([
+  const [newCount, overdue, deadlines, requests, lessons, students, audit, attendanceLessons, groupDeadlines, inboxRequests, inboxLessons] = await Promise.all([
     section === "overview" ? db.serviceRequest.count({ where: { user: scope, status: "NEW" } }) : 0,
     section === "overview" ? db.serviceRequest.count({ where: { ...active, readyBy: { lt: now } } }) : 0,
     section === "overview" ? db.deadline.findMany({ where: { user: scope, dueAt: { gte: now } }, distinct: ["title", "course", "dueAt"], orderBy: { dueAt: "asc" }, take: 5 }) : [],
     section === "requests" ? db.serviceRequest.findMany({
-      where: { user: staffStudents(user.id, groupId), status, type },
-      include: { user: { select: { name: true, studentProfile: { select: { group: { select: { name: true } } } } } } },
+      where: { user: staffStudents(user.id, groupId), status, type, ...(params.overdue === "1" ? { status: active.status, readyBy: { lt: now } } : {}) },
+      include: { user: { select: { name: true, studentProfile: { select: { surnameStress: true, group: { select: { name: true } } } } } } },
       orderBy: { createdAt: "desc" },
     }) : [],
     ["schedule", "attendance"].includes(section) ? db.groupLesson.findMany({ where: { group: staffGroups(user.id) }, include: { group: true }, orderBy: { startsAt: "asc" } }) : [],
     section === "grades" ? db.user.findMany({
       where: staffStudents(user.id, groupId), orderBy: { name: "asc" },
-      select: { id: true, name: true, studentProfile: { select: { groupId: true } }, grades: { orderBy: [{ term: "desc" }, { title: "asc" }] } },
+      select: { id: true, name: true, studentProfile: { select: { groupId: true, surnameStress: true } }, grades: { orderBy: [{ term: "desc" }, { title: "asc" }] } },
     }) : [],
     section === "audit" ? db.auditEntry.findMany({
       where: { groupId: { in: groups.map(({ id }) => id) } }, include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 100,
@@ -62,13 +63,26 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
         user: staffStudents(user.id, groupId),
         startsAt: { gte: new Date(attendanceDate + "T00:00:00+03:00"), lt: new Date(attendanceDate + "T23:59:59+03:00") },
       },
-      include: { user: { select: { name: true } }, attendances: true },
+      include: { user: { select: { name: true, studentProfile: { select: { surnameStress: true } } } }, attendances: true },
       orderBy: { startsAt: "asc" },
     }) : [],
     section === "deadlines" ? db.deadline.findMany({
       where: { user: staffStudents(user.id, groupId), dueAt: { gte: now } },
-      include: { user: { select: { name: true, studentProfile: { select: { group: { select: { name: true } } } } } } },
+      include: { user: { select: { name: true, studentProfile: { select: { surnameStress: true, group: { select: { name: true } } } } } } },
       orderBy: { dueAt: "asc" }, take: 100,
+    }) : [],
+    section === "overview" ? db.serviceRequest.findMany({
+      where: { ...active, OR: [{ status: "NEW" }, { readyBy: { lt: now } }] },
+      orderBy: [{ readyBy: "asc" }, { createdAt: "desc" }], take: 6,
+      select: { id: true, number: true, type: true, readyBy: true, user: { select: { name: true, studentProfile: { select: { surnameStress: true } } } } },
+    }) : [],
+    section === "overview" ? db.groupLesson.findMany({
+      where: { group: { ...staffGroups(user.id), students: { some: { user: { role: "STUDENT" } } } },
+        startsAt: { gte: new Date(today + "T00:00:00+03:00"), lt: new Date(+plusDays(today, 1) - 12 * 60 * 60 * 1000) },
+        marks: { none: {} },
+      },
+      select: { id: true, title: true, startsAt: true, groupId: true, group: { select: { name: true } } },
+      orderBy: { startsAt: "asc" },
     }) : [],
   ]);
   const groupOptions = groups.map(({ id, name }) => <option key={id} value={id}>{name}</option>);
@@ -77,6 +91,7 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
     JSON.stringify([title, term]), { title, term },
   ] as const))).values()].sort((a, b) => a.title.localeCompare(b.title, "ru") || b.term - a.term);
   const subject = subjects.find(({ title, term }) => title === params.subject && String(term) === params.term);
+  const gradeNumber = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
   function gradeUrl(item?: { title: string; term: number }) {
     const query = new URLSearchParams({ section: "grades" });
     if (groupId) query.set("group", groupId);
@@ -88,7 +103,7 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
   const selectedLesson = dayLessons.find((lesson) => lesson.id === params.lesson);
   const roster = selectedLesson ? await db.user.findMany({
     where: staffStudents(user.id, selectedLesson.groupId), orderBy: { name: "asc" },
-    select: { id: true, name: true, studentProfile: { select: { isMonitor: true } }, groupMarks: { where: { lessonId: selectedLesson.id } } },
+    select: { id: true, name: true, studentProfile: { select: { isMonitor: true, surnameStress: true } }, groupMarks: { where: { lessonId: selectedLesson.id } } },
   }) : [];
   const qr = selectedLesson ? await db.attendanceQr.findFirst({ where: { lessonId: selectedLesson.id, expiresAt: { gt: now } } }) : null;
   const qrLink = qr ? new URL("/attendance/check?token=" + qr.token, process.env.PUBLIC_ATTENDANCE_URL || process.env.AUTH_URL || "http://localhost:3000").href : "";
@@ -102,48 +117,53 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
     {section === "overview" && <div className="content-stack">
       <div className="staff-metrics">
         <Link className="panel" href="/staff?section=requests&status=NEW"><strong>{newCount}</strong><span>Новые заявки</span></Link>
-        <Link className="panel" href="/staff?section=requests"><strong>{overdue}</strong><span>Просроченные заявки</span></Link>
+        <Link className="panel" href="/staff?section=requests&overdue=1"><strong>{overdue}</strong><span>Просроченные заявки</span></Link>
       </div>
-      <section className="panel"><h2>Ближайшие учебные дедлайны</h2>
-        {!deadlines.length && <p className="empty">Предстоящих дедлайнов нет</p>}
-        {deadlines.map((item) => <p className="staff-row" key={item.id}>{dateLabel(item.dueAt)} · {item.title} · {item.course}</p>)}
+      <section className="panel staff-inbox">
+        <h2><Inbox size={20} aria-hidden="true" /> Входящие</h2>
+        {!inboxRequests.length && !inboxLessons.length && !deadlines.length && <p className="empty">На сейчас задач нет</p>}
+        {inboxRequests.map((item) => <Link key={item.id} className="staff-inbox-item" href={"/staff?" + new URLSearchParams({ section: "requests", request: item.id })}>
+          <BellRing size={18} aria-hidden="true" /><span><strong>{services[item.type]} · {item.user.name}</strong><small>{item.readyBy && item.readyBy < now ? "Просрочена · " + dateLabel(item.readyBy) : "Новая заявка"}{item.number && " · " + item.number}</small></span><ChevronRight size={17} aria-hidden="true" />
+        </Link>)}
+        {inboxLessons.map((lesson) => <Link key={lesson.id} className="staff-inbox-item" href={"/staff?" + new URLSearchParams({ section: "attendance", date: today, lesson: lesson.id, group: lesson.groupId })}>
+          <CalendarPlus size={18} aria-hidden="true" /><span><strong>{lesson.title} · {lesson.group.name}</strong><small>Сегодня, {timeLabel(lesson.startsAt)} · без отметок</small></span><ChevronRight size={17} aria-hidden="true" />
+        </Link>)}
+        {deadlines.map((item) => <Link key={item.id} className="staff-inbox-item" href={"/staff?section=deadlines#deadline-" + item.id}>
+          <BellRing size={18} aria-hidden="true" /><span><strong>{item.title} · {item.course}</strong><small>Дедлайн · {dateLabel(item.dueAt)}</small></span><ChevronRight size={17} aria-hidden="true" />
+        </Link>)}
       </section>
-      <div className="top-actions"><Button asChild><Link href="/staff?section=news">Опубликовать объявление</Link></Button>
-        <Button asChild variant="secondary"><Link href="/staff?section=schedule">Добавить занятие</Link></Button></div>
+      <div className="top-actions"><Button asChild><Link href="/staff?section=news"><Megaphone size={17} /> Опубликовать объявление</Link></Button>
+        <Button asChild variant="secondary"><Link href="/staff?section=schedule"><Plus size={17} /> Добавить занятие</Link></Button></div>
     </div>}
 
     {section === "requests" && <section className="panel">
-      <h2>Заявки студентов</h2>
+      <h2>{params.overdue === "1" ? "Просроченные заявки" : "Заявки студентов"}</h2>
+      {params.overdue === "1" && <Link className="text-link" href="/staff?section=requests">Все заявки</Link>}
       <form className="staff-fields">
         <input type="hidden" name="section" value="requests" />
         <label>Статус<select name="status" defaultValue={status ?? ""}><option value="">Все статусы</option>{Object.entries(statuses).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
         <label>Тип<select name="type" defaultValue={type ?? ""}><option value="">Все типы</option>{Object.entries(services).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
         <label>Группа<select name="group" defaultValue={groupId ?? ""}><option value="">Все группы</option>{groupOptions}</select></label>
-        <Button variant="secondary">Применить фильтры</Button>
+        <Button variant="secondary"><Filter size={16} /> Применить фильтры</Button>
       </form>
       {!requests.length && <p className="empty">Заявок по этим условиям нет</p>}
-      {requests.map((request) => <details className="staff-row" key={request.id}><summary>
+      {requests.map((request) => <details className="staff-row" key={request.id} open={params.request === request.id || undefined}><summary>
         <strong>{request.number ?? "№ " + request.id.slice(0, 8)}</strong> · {services[request.type]} · {statuses[request.status]}<br />
-        <span className="muted">{request.user.name} · {request.user.studentProfile?.group?.name} · {dateLabel(request.createdAt)}</span>
-      </summary><form className="staff-fields" action={processRequest}>
-        <input type="hidden" name="id" value={request.id} /><input type="hidden" name="revision" value={request.revision} />
-        <label>Статус<select name="status" defaultValue={request.status}>{[request.status, ...transitions[request.status]].map((value) => <option key={value} value={value}>{statuses[value]}</option>)}</select></label>
-        <label>Срок готовности<input name="readyBy" type="date" defaultValue={request.readyBy ? campusDay(request.readyBy) : ""} /></label>
-        <label className="staff-wide">Комментарий студенту<textarea name="comment" maxLength={1000} defaultValue={request.comment ?? ""} /></label>
-        <Button>Сохранить заявку</Button>
-      </form></details>)}
+        <span className="muted">{displayStudent(request.user.name, request.user.studentProfile?.surnameStress)} · {request.user.studentProfile?.group?.name} · {dateLabel(request.createdAt)}</span>
+      </summary><StaffRequestForm key={request.revision} id={request.id} revision={request.revision} status={request.status}
+        comment={request.comment ?? ""} readyBy={request.readyBy ? campusDay(request.readyBy) : ""} /></details>)}
     </section>}
 
     {section === "news" && <section className="panel"><h2>Новое объявление</h2><form className="staff-fields" action={publish}>
       <label>Формат<select name="kind"><option value="news">Новость</option><option value="reminder">Напоминание</option></select></label>
-      <label>Аудитория<select name="audience"><option value="all">Все закреплённые группы</option>
+      <label>Аудитория<select name="audience" defaultValue={groupId ? "group:" + groupId : "all"}><option value="all">Все закреплённые группы</option>
         {[...new Set(groups.map(({ faculty }) => faculty))].map((faculty) => <option key={faculty} value={"faculty:" + faculty}>Факультет · {faculty}</option>)}
         {[...new Set(groups.map(({ course }) => course))].map((course) => <option key={course} value={"course:" + course}>Курс · {course}</option>)}
         {groups.map(({ id, name }) => <option key={id} value={"group:" + id}>Группа · {name}</option>)}
       </select></label>
       <label className="staff-wide">Заголовок<input name="title" maxLength={120} required /></label>
       <label className="staff-wide">Текст<textarea name="body" maxLength={2000} required /></label>
-      <Button disabled={!groups.length}>Опубликовать</Button>
+      <Button disabled={!groups.length}><Send size={16} /> Опубликовать</Button>
     </form></section>}
 
     {section === "schedule" && <div className="content-stack"><StaffCalendar today={today} date={attendanceDate} days={[...new Set(lessons.map((lesson) => campusDay(lesson.startsAt)))]} /><section className="panel"><h2>Добавить занятие · {dateLabel(new Date(attendanceDate + "T12:00:00+03:00"), true)}</h2><form className="staff-fields" action={saveLesson}>
@@ -186,12 +206,12 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
       </Link>)}</div>
       {selectedLesson && <section className="content-stack">
         <h3>{selectedLesson.title} · {selectedLesson.group.name}</h3>
-        <GroupRoster showSummary={params.saved === "1"} key={selectedLesson.id} id={selectedLesson.id} students={roster.map((student) => ({ ...student, status: student.groupMarks[0]?.status }))} />
+        <GroupRoster showSummary={params.saved === "1"} key={selectedLesson.id} id={selectedLesson.id} students={roster.map((student) => ({ ...student, name: displayStudent(student.name, student.studentProfile?.surnameStress), status: student.groupMarks[0]?.status }))} />
         <form className="staff-fields" action={groupAttendance}>
           <input type="hidden" name="lesson" value={selectedLesson.id} /><input type="hidden" name="command" value="monitor" />
           <label>Староста<select name="student" defaultValue={roster.find((student) => student.studentProfile?.isMonitor)?.id ?? ""}>
             <option value="">Без доступа старосты</option>
-            {roster.map((student) => <option value={student.id} key={student.id}>{student.name}</option>)}
+            {roster.map((student) => <option value={student.id} key={student.id}>{displayStudent(student.name, student.studentProfile?.surnameStress)}</option>)}
           </select></label><Button variant="secondary">Сохранить доступ старосты</Button>
         </form>
         <form action={groupAttendance} className="top-actions">
@@ -207,8 +227,8 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
         const mark = lesson.attendances.find((item) => item.userId === lesson.userId)?.status;
         return <form className="staff-fields" key={lesson.id} action={saveAttendance}>
           <input type="hidden" name="lesson" value={lesson.id} />
-          <p className="staff-wide">{lesson.user.name} · {lesson.title} · {timeLabel(lesson.startsAt)}–{timeLabel(lesson.endsAt)}</p>
-          <AttendanceCheckbox key={mark ?? ""} name="status" student={lesson.user.name} status={mark} />
+          <p className="staff-wide">{displayStudent(lesson.user.name, lesson.user.studentProfile?.surnameStress)} · {lesson.title} · {timeLabel(lesson.startsAt)}–{timeLabel(lesson.endsAt)}</p>
+          <AttendanceCheckbox key={mark ?? ""} name="status" student={displayStudent(lesson.user.name, lesson.user.studentProfile?.surnameStress)} status={mark} />
           <Button variant="secondary">Сохранить</Button>
         </form>;
       })}
@@ -222,38 +242,57 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
       <Button disabled={!groups.length}>Добавить и уведомить</Button>
     </form></section><section className="panel"><h2>Предстоящие дедлайны</h2>
       {!groupDeadlines.length && <p className="empty">Дедлайнов пока нет</p>}
-      {groupDeadlines.map((deadline) => <p className="staff-row" key={deadline.id}>
-        {dateLabel(deadline.dueAt)} · {deadline.title} · {deadline.course} · {deadline.user.name}
+      {groupDeadlines.map((deadline) => <p className="staff-row deadline-target" id={"deadline-" + deadline.id} key={deadline.id}>
+        {dateLabel(deadline.dueAt)} · {deadline.title} · {deadline.course} · {displayStudent(deadline.user.name, deadline.user.studentProfile?.surnameStress)}
       </p>)}
     </section></div>}
 
     {section === "grades" && <section className="panel">
       <h2>Журнал оценок</h2>
-      <form className="staff-fields"><input type="hidden" name="section" value="grades" /><label>Группа<select name="group" defaultValue={groupId ?? ""}><option value="">Все группы</option>{groupOptions}</select></label><Button variant="secondary">Показать</Button></form>
+      <form className="staff-fields"><input type="hidden" name="section" value="grades" />{subject && <><input type="hidden" name="subject" value={subject.title} /><input type="hidden" name="term" value={subject.term} /></>}<label>Группа<select name="group" defaultValue={groupId ?? ""}><option value="">Все группы</option>{groupOptions}</select></label><Button variant="secondary">Показать</Button></form>
       <section aria-label="Средний балл групп" className="content-stack">
         <h3>{subject ? "Средний балл по предмету" : "Средний балл по группам"}</h3>
         {groups.filter((group) => !groupId || group.id === groupId).map((group) => {
-          const grades = students.filter((student) => student.studentProfile?.groupId === group.id)
-            .flatMap((student) => student.grades)
-            .filter((grade) => !subject || (grade.title === subject.title && grade.term === subject.term));
+          const groupStudents = students.filter((student) => student.studentProfile?.groupId === group.id);
+
+          const matches = (grade: (typeof students)[number]["grades"][number]) => !subject || (grade.title === subject.title && grade.term === subject.term);
+          const grades = groupStudents.flatMap((student) => student.grades.filter(matches));
+          const gradedCount = groupStudents.filter((student) => student.grades.some(matches)).length;
+          const belowCount = groupStudents.filter((student) => student.grades.some((grade) => matches(grade) && grade.score < grade.threshold)).length;
           const score = grades.reduce((sum, grade) => sum + grade.score, 0);
           const threshold = grades.reduce((sum, grade) => sum + grade.threshold, 0);
           const low = grades.length > 0 && score < threshold;
-          const format = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
+          const average = grades.length ? score / grades.length : 0;
+          const passMark = grades.length ? threshold / grades.length : 0;
           return <div key={group.id} className={low ? "group-grade group-grade-low" : "group-grade"}>
-            <strong>{group.name}</strong>
-            {grades.length ? <div>
-              <strong>{format.format(score / grades.length)} из 100</strong>
-              <p className="muted">Средний порог: {format.format(threshold / grades.length)}{low ? " · Ниже порога" : ""}</p>
-            </div> : <p className="muted">Оценок пока нет</p>}
+            <div className="group-grade-heading">
+              <strong>{group.name}</strong>
+              {grades.length > 0 && <strong>{gradeNumber.format(average)} <span className="muted">из 100</span></strong>}
+            </div>
+            {grades.length ? <>
+              <div className="group-grade-scale" style={{ "--pass-mark": passMark + "%" } as React.CSSProperties}>
+                <meter min={0} max={100} value={average} aria-label={"Средний балл · " + group.name} aria-valuetext={gradeNumber.format(average) + " из 100"} />
+                <span className="group-grade-marker" aria-hidden="true" />
+              </div>
+              <div className="group-grade-caption muted">
+                <span>Средний порог: {gradeNumber.format(passMark)}</span>
+                {low && <strong>Ниже порога</strong>}
+              </div>
+            </> : <p className="muted">Оценок пока нет</p>}
+            <div className="group-grade-caption">
+              <p className="muted">Оценены {gradedCount} из {groupStudents.length} · Ниже порога: {belowCount}</p>
+              <Button asChild variant="secondary"><Link href={"/staff?" + new URLSearchParams({ section: "news", group: group.id })}>
+                <Megaphone size={16} /> Объявление группе <ArrowUpRight size={14} />
+              </Link></Button>
+            </div>
           </div>;
         })}
       </section>
       {subject ? <>
         <Link className="text-link" href={gradeUrl()}>← К списку предметов</Link>
         <h3>{subject.title} · семестр {subject.term}</h3>
-        <GradeRegister key={gradeUrl(subject)} title={subject.title} term={subject.term} group={groupId} initialStudent={typeof params.student === "string" ? params.student : undefined} rows={students.map((student) => ({
-          id: student.id, name: student.name, group: groups.find((group) => group.id === student.studentProfile?.groupId)?.name ?? "",
+        <GradeRegister key={gradeUrl(subject) + ":" + (typeof params.student === "string" ? params.student : "")} title={subject.title} term={subject.term} group={groupId} initialSearch={typeof params.q === "string" ? params.q : ""} initialUngraded={params.ungraded === "1"} initialStudent={typeof params.student === "string" ? params.student : undefined} rows={students.map((student) => ({
+          id: student.id, name: displayStudent(student.name, student.studentProfile?.surnameStress), group: groups.find((group) => group.id === student.studentProfile?.groupId)?.name ?? "",
           grade: student.grades.find((grade) => grade.title === subject.title && grade.term === subject.term),
         }))} />
       </> : <>
@@ -261,15 +300,10 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
         {subjects.length ? <div className="service-list">{subjects.map((item) => <Link key={gradeUrl(item)} className="service-item" href={gradeUrl(item)}>{item.title} · семестр {item.term}</Link>)}</div> : <p className="empty">Предметов пока нет</p>}
         <details className="staff-row"><summary>Добавить предмет и первую оценку</summary>
       <form className="staff-fields" action={saveGrade}>
-        <label>Студент<select name="student" required>{students.map((student) => <option key={student.id} value={student.id}>{student.name} · {groups.find((group) => group.id === student.studentProfile?.groupId)?.name}</option>)}</select></label>
+        <label>Студент<select name="student" required>{students.map((student) => <option key={student.id} value={student.id}>{displayStudent(student.name, student.studentProfile?.surnameStress)} · {groups.find((group) => group.id === student.studentProfile?.groupId)?.name}</option>)}</select></label>
         <label>Дисциплина<input name="title" maxLength={120} required /></label>
         <label>Семестр<input name="term" type="number" min={1} max={20} required /></label>
-        <label>Аттестация<select name="assessment">{assessmentOptions.map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
-        <label>Балл<input name="score" type="number" min={0} max={100} required /></label>
-        <label>Порог<input name="threshold" type="number" min={1} max={100} required /></label>
-        <label>Итог (2–5)<input name="finalGrade" type="number" min={2} max={5} /></label>
-        <label>Зачёт<select name="passed"><option value="">—</option><option value="true">Зачтено</option><option value="false">Не зачтено</option></select></label>
-        <Button disabled={!students.length}>Сохранить оценку</Button>
+        <GradeFields disabled={!students.length} />
       </form>
         </details>
       </>}

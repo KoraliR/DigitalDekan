@@ -1,3 +1,4 @@
+import { attendanceStreak } from "@/lib/campus-tools";
 import { Dashboard } from "@/components/dashboard";
 import { account } from "@/lib/access";
 import { db } from "@/lib/db";
@@ -8,7 +9,7 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
   const user = await account("STUDENT");
   const tab = validTab((await params).tab);
   const { room } = await searchParams;
-  const [lessons, grades, deadlines, requests, news, groupLessons, notifications, attendance] = await Promise.all([
+  const [lessons, grades, deadlines, requests, news, groupLessons, notifications, attendance, streak, libraryLoans, campusBookings] = await Promise.all([
     tab === "today" || tab === "map" ? db.lesson.findMany({ where: { userId: user.id }, orderBy: { startsAt: "asc" } }) : [],
     tab === "grades" ? db.grade.findMany({ where: { userId: user.id }, orderBy: { term: "desc" } }) : [],
     tab === "today" || tab === "calendar" ? db.deadline.findMany({ where: { userId: user.id }, orderBy: { dueAt: "asc" } }) : [],
@@ -17,6 +18,9 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
     user.groupId && (tab === "today" || tab === "map") ? db.groupLesson.findMany({ where: { groupId: user.groupId }, include: { group: { select: { name: true } }, marks: { where: { userId: user.id } } } }) : [],
     tab === "today" || tab === "calendar" ? db.notification.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }) : [],
     tab === "today" ? db.attendance.findMany({ where: { userId: user.id } }) : [],
+    tab === "today" ? attendanceStreak(user.id, user.groupId) : undefined,
+    tab === "today" || tab === "calendar" ? db.campusLoan.findMany({ where: { userId: user.id }, include: { book: { select: { title: true } } } }) : [],
+    tab === "today" || tab === "calendar" ? db.campusBooking.findMany({ where: { userId: user.id, slot: { startsAt: { gte: new Date() } } }, include: { slot: true } }) : [],
   ]);
   const attendanceByLesson = new Map(attendance.map((item) => [item.lessonId, item.status]));
 
@@ -48,10 +52,14 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
     endsAt: lesson.endsAt.toISOString(),
   }));
 
-  return <Dashboard monitor={user.isMonitor} initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} data={{
+  return <Dashboard streak={streak} monitor={user.isMonitor} initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} data={{
     lessons: [...ownLessons, ...sharedLessons].sort((left, right) => +new Date(left.startsAt) - +new Date(right.startsAt)),
     grades: grades.map(({ userId, ...grade }) => grade),
-    deadlines: deadlines.map(({ userId, ...deadline }) => ({ ...deadline, dueAt: deadline.dueAt.toISOString(), lessonId: deadline.lessonId, completedAt: deadline.completedAt?.toISOString() ?? null })),
+        deadlines: [
+      ...deadlines.map(({ userId, ...deadline }) => ({ ...deadline, dueAt: deadline.dueAt.toISOString(), lessonId: deadline.lessonId, completedAt: deadline.completedAt?.toISOString() ?? null })),
+      ...libraryLoans.map(({ bookId, book, dueAt }) => ({ id: "loan-" + bookId, title: "Вернуть книгу · " + book.title, course: "Библиотека", dueAt: dueAt.toISOString(), lessonId: null, completedAt: null })),
+      ...campusBookings.map(({ slot }) => ({ id: "booking-" + slot.id, title: slot.title, course: slot.place, dueAt: slot.startsAt.toISOString(), lessonId: null, completedAt: null })),
+    ].sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt)),
     requests: requests.map(({ userId, ...request }) => ({
       id: request.id,
       number: request.number ?? "З-" + request.id.slice(0, 8),

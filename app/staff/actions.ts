@@ -29,7 +29,11 @@ async function mutate(section: string, form: FormData, operation: Operation) {
     query.set("student", field(form, "student", 100));
     const group = field(form, "group", 100);
     if (group) query.set("group", group);
+    const search = field(form, "q", 100);
+    if (search) query.set("q", search);
+    if (form.get("ungraded") === "1") query.set("ungraded", "1");
   }
+  if (section === "requests") query.set("request", field(form, "id", 100));
   const returnTo = "/staff?" + query;
   try {
     await db.$transaction((tx) => operation(tx, staff.id, form));
@@ -42,7 +46,11 @@ async function mutate(section: string, form: FormData, operation: Operation) {
   }
   revalidatePath("/cabinet", "layout");
   revalidatePath("/staff");
-  redirect(returnTo + "&saved=1");
+  if (section === "grades" && form.get("advance") === "1") {
+    const next = field(form, "nextStudent", 100);
+    if (next) query.set("student", next);
+  }
+  redirect("/staff?" + query + "&saved=1");
 }
 
 export async function processRequest(form: FormData) {

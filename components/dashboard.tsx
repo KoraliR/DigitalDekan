@@ -237,8 +237,8 @@ function Services({ demo, requests }: { demo: boolean; requests: DashboardData["
   </div>;
 }
 
-export function Dashboard({ tab, day, data, role, name, monitor = false, demo = false, initialRoom }: {
-  tab: Tab; day: string; data: DashboardData; role: "STUDENT" | "STAFF"; name: string; monitor?: boolean; demo?: boolean; initialRoom?: string;
+export function Dashboard({ tab, day, data, role, name, monitor = false, streak, demo = false, initialRoom }: {
+  tab: Tab; day: string; data: DashboardData; role: "STUDENT" | "STAFF"; name: string; monitor?: boolean; streak?: { count: number; waiting: boolean }; demo?: boolean; initialRoom?: string;
 }) {
   const [menu, setMenu] = useState(false);
   const [selectedDay, setSelectedDay] = useState("");
@@ -271,6 +271,18 @@ export function Dashboard({ tab, day, data, role, name, monitor = false, demo = 
         <div className="banner-content"><p><CalendarDays size={16} /> <span className="banner-date">{dateLabel(plusDays(day, 0), true)}</span></p><h1>Сегодня</h1><div>Расписание занятий и ближайшие дедлайны</div></div>
         <div className="banner-art" aria-hidden="true"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbit orbit-three" /><div className="banner-icon"><CalendarDays size={68} strokeWidth={1.3} /></div><span className="art-arrow"><ArrowUpRight size={22} /></span></div>
       </section> : <div className="page-heading"><h1>{title}</h1></div>}
+      {!demo && (tab === "services" || tab === "profile" || tab === "today") && <div className="campus-shortcuts">
+        {tab === "today" && streak && <section className="panel">
+          <h2>Серия посещений</h2><strong>Дней подряд: {streak.count}</strong>
+          {streak.waiting && <p className="muted">Серия ждёт отметок за ближайший незакрытый день.</p>}
+        </section>}
+        {tab === "today" && <Link className="panel route-link" href="/campus-tools?tab=booking&window=1"><div><h2>Свободные окна</h2><p className="muted">Консультации, спортзал и другие занятия между парами</p></div><ArrowRight size={18} /></Link>}
+        {tab === "services" && <Link className="panel route-link" href="/campus-tools"><div><h2>Кампус и сервисы</h2><p className="muted">Пересдачи, консультации, бронирование, библиотека и объявления</p></div><ArrowRight size={18} /></Link>}
+        {tab === "profile" && <div className="campus-nav">
+          <Link className="button button-secondary" href="/campus-tools?tab=profile">Пропуск и ударение</Link>
+          <Link className="button button-secondary" href="/campus-tools?tab=portfolio">Портфолио</Link>
+        </div>}
+      </div>}
       {tab === "today" && <div className="content-stack">
         <div className="dashboard-grid">
           <Schedule lessons={data.lessons} deadlines={data.deadlines} day={day} mapUrl={base + "map"} icsUrl={demo ? undefined : "/api/schedule"} />

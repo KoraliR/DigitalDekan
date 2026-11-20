@@ -5,7 +5,7 @@ import type { ComponentProps } from "react";
 
 export function Button({ asChild, className, variant = "primary", ...props }: ComponentProps<"button"> & {
   asChild?: boolean;
-  variant?: "primary" | "secondary" | "icon";
+  variant?: "primary" | "secondary" | "icon" | "danger";
 }) {
   const Component = asChild ? Slot : "button";
   return <Component className={twMerge(clsx("button", "button-" + variant, className))} {...props} />;

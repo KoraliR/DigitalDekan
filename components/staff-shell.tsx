@@ -23,6 +23,7 @@ export function StaffShell({ name, section, children }: { name: string; section:
       <div className="top-actions"><ThemeToggle /><PasswordDialog /><form action={logout}><Button variant="secondary">Выйти</Button></form></div>
     </header>
     <p className="notice">Концепт для конкурса. Не является официальным сервисом вуза</p>
+    <Link className="button button-secondary campus-staff-link" href="/staff/campus" aria-current={section === "campus" ? "page" : undefined}>Сервисы кампуса</Link>
     <nav className="staff-nav" aria-label="Служебные разделы">
       {tabs.map(({ id, label, icon: Icon }) =>
         <Link key={id} href={"/staff?section=" + id} aria-current={section === id ? "page" : undefined}>

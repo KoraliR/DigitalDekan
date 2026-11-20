@@ -17,7 +17,12 @@ export function Login({ enabled, staff = false, next }: { enabled: boolean; staf
     setError("");
     run(async () => {
       try {
-        if (code) { const result = await finishLogin(form); if (result?.url) window.location.assign(typeof next === "string" && /^\/attendance\/check\?token=[a-f0-9]{48}$/.test(next) ? next : result.url); else setError(result?.error ?? ""); }
+        if (code) {
+          const result = await finishLogin(form);
+          const allowedReturn = staff ? /^\/staff\/campus\/pass\?token=[a-f0-9]{48}$/ : /^\/attendance\/check\?token=[a-f0-9]{48}$/;
+          if (result?.url) window.location.assign(typeof next === "string" && allowedReturn.test(next) ? next : result.url);
+          else setError(result?.error ?? "");
+        }
         else {
           const result = await startLogin(form);
           if (result.code) setCode(result.code);
