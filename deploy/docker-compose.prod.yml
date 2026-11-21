@@ -1,0 +1,113 @@
+# Производственный стек «Цифрового деканата» для VPS (Ubuntu 22.04/24.04).
+#
+# Базовый вариант — db + app, без публикации БД наружу и с портом app только
+# на loopback (вариант с host-nginx):
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+#
+# Рекомендуемый вариант — с автоматическим HTTPS от Caddy (запускать оба файла):
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.caddy.yml up -d
+#
+# Переменные берутся из deploy/.env.prod (флаг --env-file; шаблон — .env.prod.example).
+# Имена ${VAR} в этом файле подставляет сам Docker Compose из --env-file,
+# а ${VAR:-default} в environment передаются контейнерам.
+#
+# Схема портов:
+#   db    — портов наружу НЕТ (только внутри сети compose);
+#   app   — 127.0.0.1:3000 (loopback, для host-nginx; Caddy ходит по сети app:3000);
+#   caddy — 80/443 (см. docker-compose.caddy.yml).
+
+name: dekanat
+
+services:
+  db:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?задайте POSTGRES_USER в deploy/.env.prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в deploy/.env.prod}
+      POSTGRES_DB: ${POSTGRES_DB:?задайте POSTGRES_DB в deploy/.env.prod}
+      TZ: ${TZ:-Europe/Moscow}
+      PGTZ: ${TZ:-Europe/Moscow}
+    volumes:
+      # Postgres 18: официальный образ сменил точку монтирования на /var/lib/postgresql
+      # (внутри PGDATA=/var/lib/postgresql/18/docker). Монтировать /var/lib/postgresql/data
+      # для 18+ нельзя — данные не будут персистентными.
+      - dekanat-db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - dekanat
+
+  app:
+    build:
+      # Контекст — корень проекта outputs/dekanat (там лежат package.json, prisma/, scripts/,
+      # lib/, app/); .dockerignore тоже лежит в корне.
+      context: ..
+      dockerfile: Dockerfile
+    image: dekanat-app:latest
+    restart: unless-stopped
+    # Секреты и настройки демо-режима приходят из deploy/.env.prod.
+    env_file:
+      - .env.prod
+    environment:
+      NODE_ENV: production
+      TZ: ${TZ:-Europe/Moscow}
+      # Для контейнера хост БД — имя сервиса db; пароль должен быть URL-безопасным
+      # (генерируйте hex: openssl rand -hex 24).
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?schema=public
+      # Публичный адрес приложения: от него зависят secure-cookie Auth.js и QR-ссылки.
+      AUTH_URL: https://${DOMAIN}
+      PUBLIC_ATTENDANCE_URL: https://${DOMAIN}
+      AUTH_SECRET: ${AUTH_SECRET:?задайте AUTH_SECRET в deploy/.env.prod}
+      DEMO_2FA_ENABLED: ${DEMO_2FA_ENABLED:-true}
+      DEMO_ACCOUNT_PASSWORD: ${DEMO_ACCOUNT_PASSWORD:-dekanat-2026}
+    depends_on:
+      db:
+        condition: service_healthy
+    # Только loopback: 3000 нужен host-nginx (вариант без Caddy).
+    # В варианте с Caddy приложение доступно Caddy по внутреннему адресу app:3000.
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      # GET /api/health отдаёт 200, только если приложение живо и БД доступна.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    # Миграции Prisma применяются при каждом старте контейнера, затем старт Next.js.
+    command: ["sh", "-c", "npx prisma migrate deploy && npx next start -p 3000"]
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - dekanat
+
+networks:
+  # Общая сеть db ↔ app ↔ caddy; наружу её не публикуем.
+  dekanat:
+    name: dekanat
+    driver: bridge
+
+volumes:
+  # Данные PostgreSQL. Имя без префикса проекта — предсказуемые docker volume ls.
+  # ВАЖНО: Postgres 18 хранит данные в PGDATA=/var/lib/postgresql/18/docker,
+  # поэтому volume монтируется в /var/lib/postgresql, а не в /var/lib/postgresql/data.
+  dekanat-db:
+    name: dekanat-db
+# Бэкапы (deploy/backup.sh) складываются в deploy/backups/ на ХОСТЕ — отдельный
+# volume не нужен: pg_dump выполняется в контейнере db, а файл пишется на хосте
+# через перенаправление stdout (это же избавляет от проблем с правами на bind-mount).

@@ -1,0 +1,60 @@
+# Caddyfile для «Цифрового деканата» (Caddy 2, автоматический HTTPS Let's Encrypt).
+#
+# Запуск (вместе с базовым compose-файлом):
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.caddy.yml up -d
+#
+# Домен и e-mail ACME берутся из deploy/.env.prod: DOMAIN, ACME_EMAIL.
+# Caddy сам выпускает сертификат (HTTP-01, порт 80) и продлевает его.
+# Требуется DNS A-запись домена на IP этого VPS и открытые порты 80/443.
+{
+	# E-mail ACME-аккаунта: уведомления Let's Encrypt об истечении/проблемах сертификата.
+	email {$ACME_EMAIL}
+
+	# Отключать админ-API не обязательно; по умолчанию он слушает только localhost контейнера.
+	# admin off
+}
+
+# Основной сайт. Caddy включает HTTPS автоматически для доменного имени.
+{$DOMAIN} {
+	# Сжатие ответов (zstd — если браузер поддерживает, иначе gzip).
+	encode zstd gzip
+
+	# Приложение за обратным прокси: next start слушает 3000 внутри сети compose.
+	# X-Forwarded-For / X-Forwarded-Proto / X-Forwarded-Host Caddy добавляет сам —
+	# от них зависит secure-cookie Auth.js и адреса QR-кодов.
+	reverse_proxy app:3000
+
+	# Заголовки безопасности.
+	header {
+		# HSTS на год, БЕЗ includeSubDomains (осознанно: поддомены могут жить отдельно).
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(self), microphone=(), geolocation=()"
+		# Скрыть версию Caddy из заголовка Server.
+		-Server
+	}
+
+	# Логи только уровня ERROR, чтобы не забивать диск при штатной работе.
+	log {
+		level ERROR
+	}
+
+	# ------------------------------------------------------------------------
+	# Отладка без «боевого» домена — раскомментируйте ОДИН из вариантов.
+	# ------------------------------------------------------------------------
+	# 1) Тест без реального домена: самоподписанный сертификат от внутреннего CA Caddy.
+	#    Браузер покажет предупреждение — это нормально для теста.
+	#    Для этого замените DOMAIN на localhost или IP и раскомментируйте строку:
+	# tls internal
+	#
+	# 2) Проверка выпуска сертификата на staging-окружении Let's Encrypt, чтобы
+	#    не упираться в лимиты продакшена при экспериментах. После проверки верните
+	#    продакшен-настройки и ОБЯЗАТЕЛЬНО удалите caddy-data:
+	#      docker compose ... down
+	#      docker volume rm dekanat-caddy-data
+	# tls {
+	# 	ca https://acme-staging-v02.api.letsencrypt.org/directory
+	# }
+}

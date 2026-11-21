@@ -1,9 +1,41 @@
+# Контекст сборки Docker-образа. ВАЖНО: app/, components/, lib/, prisma/, scripts/
+# НЕ исключаем — они нужны для `prisma generate` и `npm run build`.
+
+# Зависимости и артефакты локальной сборки
 node_modules
 .next
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Git и CI
 .git
+.github
+
+# Секреты (в образ попадают только заглушки из Dockerfile)
 .env
 .env.*
-npm-debug.log*
+.env.prod
+.env.prod.*
+deploy/.env.prod
+
+# Docker/compose (не нужны внутри образа)
 Dockerfile
-docker-compose.yml
+Dockerfile.*
+docker-compose*.yml
+
+# Production-кит и локальные каталоги (не должны раздувать контекст)
+deploy
 docs
+work
+outputs
+certificates
+backups
+*.dump
+
+# Документация
+*.md
+
+# Мусор
+npm-debug.log*
+yarn-error.log*
+.DS_Store

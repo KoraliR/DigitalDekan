@@ -9,7 +9,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - dekanat-db:/var/lib/postgresql/data
+      # Postgres 18: официальный образ хранит данные в /var/lib/postgresql/18/docker,
+      # поэтому монтировать нужно /var/lib/postgresql (иначе данные не персистентны).
+      - dekanat-db:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dekanat -d dekanat"]
       interval: 5s

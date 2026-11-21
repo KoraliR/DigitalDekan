@@ -1,7 +1,17 @@
 .env
 .env.*
 !.env.example
+# Шаблон production-окружения коммитим, а готовый файл с реальными секретами — нет.
+!deploy/.env.prod.example
+deploy/.env.prod
+deploy/.env
 node_modules/
 .next/
 *.tsbuildinfo
 next-env.d.ts
+certificates/
+# Бэкапы БД из deploy/backup.sh не коммитим, но заранее подготовленный
+# дамп с демо-данными (deploy/backups/dekanat-db-seed.dump) доставляем вместе с проектом.
+deploy/backups/*.dump
+!deploy/backups/dekanat-db-seed.dump
+deploy/backups/*.sql

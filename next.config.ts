@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: { authInterrupts: true },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  // Не раскрываем стек в заголовке X-Powered-By (TLS и остальные заголовки — на reverse-proxy).
+  poweredByHeader: false,
   async headers() {
     return [{
       source: "/(.*)",

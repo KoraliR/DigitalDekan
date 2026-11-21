@@ -1,0 +1,48 @@
+# HTTPS-фронтенд на Caddy 2 с автоматическим сертификатом Let's Encrypt.
+#
+# Запускать ВМЕСТЕ с базовым файлом (иначе не определены сервисы app/db и сеть):
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.caddy.yml up -d
+#
+# Caddy сам выпускает и продлевает сертификат. Требования:
+#   * DNS A-запись (и AAAA, если есть IPv6) домена DOMAIN указывает на этот VPS;
+#   * открыты порты 80/tcp (ACME HTTP-01 и редирект) и 443/tcp + 443/udp (HTTPS/HTTP3);
+#   * в deploy/.env.prod заполнены DOMAIN и ACME_EMAIL.
+# Сертификаты и ACME-аккаунт хранятся в named volume caddy-data и переживают пересоздание.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"        # ACME HTTP-01 + автоматический редирект на HTTPS
+      - "443:443"      # HTTPS
+      - "443:443/udp"  # HTTP/3 (QUIC)
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data     # сертификаты, ACME-аккаунт, OCSP-стейпл
+      - caddy-config:/config # автосохранённая конфигурация Caddy
+    # DOMAIN и ACME_EMAIL Caddy читает из окружения (плейсхолдеры {$DOMAIN}, {$ACME_EMAIL}).
+    env_file:
+      - .env.prod
+    depends_on:
+      app:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - dekanat
+
+networks:
+  # Та же сеть, что в docker-compose.prod.yml (файлы всегда используются вместе).
+  dekanat:
+    name: dekanat
+    driver: bridge
+
+volumes:
+  caddy-data:
+    name: dekanat-caddy-data
+  caddy-config:
+    name: dekanat-caddy-config
