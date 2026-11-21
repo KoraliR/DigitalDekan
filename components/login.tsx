@@ -52,11 +52,11 @@ export function Login({ enabled, staff = false, next }: { enabled: boolean; staf
         {code ? <>
           <div className="notice">Код для демонстрации <strong>{code}</strong></div>
           <Field label="Код подтверждения" htmlFor="login-code">
-            <input id="login-code" className="otp" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required />
+            <input id="login-code" className="otp" name="code" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required suppressHydrationWarning />
           </Field>
         </> : <>
           <input type="hidden" name="entry" value={staff ? "staff" : "student"} />
-          <Field label="Логин" htmlFor="login"><input id="login" name="login" autoComplete="username" maxLength={80} required /></Field>
+          <Field label="Логин" htmlFor="login"><input id="login" name="login" autoComplete="username" maxLength={80} required suppressHydrationWarning /></Field>
           <Field label="Пароль" htmlFor="login-password">
             <PasswordField id="login-password" name="password" autoComplete="current-password" required />
           </Field>
@@ -74,7 +74,6 @@ export function Login({ enabled, staff = false, next }: { enabled: boolean; staf
       </p>}
       {!enabled && <p className="notice">Вход с учётной записью отключён в настройках сервера.</p>}
       <Link className="text-link" href={staff ? "/login" : "/staff-login"}>{staff ? "Вход студента" : "Вход сотрудника"}</Link>
-      <Button asChild variant="secondary" className="demo-link"><Link href="/demo/today">Открыть демоверсию</Link></Button>
     </section>
   </main>;
 }

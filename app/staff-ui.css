@@ -45,6 +45,11 @@
 .staff-back-links { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin: 6px 0 2px; }
 .staff-back-links .text-link { margin-top: 0; }
 
+/* --- Новости: список с просмотром и удалением (app/staff/page.tsx) --- */
+.news-admin > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.news-admin-body { display: grid; gap: 12px; padding: 10px 10px 12px; }
+.news-admin-body .button { justify-self: start; }
+
 /* --- Дедлайны: блоки с отметками студентов (components/deadline-roster.tsx) --- */
 .deadline-block > summary { display: grid; gap: 2px; }
 .deadline-block > summary strong { color: var(--ink); }

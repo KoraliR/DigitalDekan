@@ -70,6 +70,7 @@ model User {
   studentProfile StudentProfile?
   staffProfile   StaffProfile?
   notifications  Notification[]
+  newsAuthors    News[]            @relation("NewsAuthor")
   audits         AuditEntry[]
   lessons        Lesson[]
   grades         Grade[]
@@ -159,10 +160,14 @@ model ServiceRequest {
 }
 
 model News {
-  id        String   @id @default(cuid())
-  title     String
-  body      String
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  kind        String   @default("news")
+  audience    String   @default("all")
+  createdById String?
+  author      User?    @relation("NewsAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
 }
 
 model LoginChallenge {

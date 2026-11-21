@@ -52,3 +52,29 @@
 @media (prefers-reduced-motion: reduce) {
   .grade-chevron { transition: none; }
 }
+
+/* --- Новости: клик по новости и отдельная страница --- */
+.news-item-link { display: grid; gap: 3px; margin: -4px; padding: 4px; border-radius: 9px; }
+.news-item-link:hover h3 { color: var(--accent-ink); }
+.news-item-link:hover .news-open { text-decoration: underline; }
+.news-preview { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.news-open { display: inline-flex; align-items: center; gap: 5px; color: var(--accent-ink); font-size: 11px; font-weight: 850; }
+.news-list h3 .pill { margin-left: 8px; vertical-align: middle; }
+.news-page { display: grid; gap: 13px; max-width: 860px; margin-inline: auto; }
+.news-page-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.news-page-head .text-link { margin-top: 0; }
+.news-detail-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.news-detail .h1, .news-detail h1 { font-size: clamp(23px, 4vw, 33px); letter-spacing: -.045em; }
+.news-detail-body { font-size: 14px; line-height: 1.65; white-space: pre-wrap; }
+.news-detail-foot { margin-top: 6px; }
+
+/* --- Журнал старосты: заголовок и кнопка выхода --- */
+.journal-head { flex-wrap: wrap; align-items: flex-start; }
+.journal-head .top-actions { flex-wrap: wrap; }
+.journal-head .button { white-space: nowrap; }
+@media (max-width: 640px) {
+  .journal-head { flex-direction: column; align-items: stretch; gap: 12px; }
+  .journal-head h1 { font-size: 26px; }
+  .journal-head .top-actions { display: grid; grid-template-columns: 1fr; }
+  .journal-head .button { width: 100%; }
+}

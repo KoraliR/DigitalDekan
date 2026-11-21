@@ -4,10 +4,11 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, CalendarPlus, CheckCheck, ChevronDown, ChevronLeft, ChevronRight,
   CircleHelp, Clock3, Coffee, FileText, GraduationCap, Info, LogOut, Map, MapPin, Megaphone, Menu,
-  Route, Shield, UserRound, X, type LucideIcon,
+  Route, Shield, UserCheck, UserRound, X, type LucideIcon,
 } from "lucide-react";
 import { apply, logout, markNotificationsRead } from "@/app/actions";
 import { campusDay, dateLabel, daysBetween, finalGradeLabel, assessments, plusDays, requestStatusClass, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
+import { newsKindClass, newsKindLabel } from "@/lib/news";
 import type { Tab } from "@/lib/tabs";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
@@ -113,12 +114,24 @@ function Deadlines({ items, day, href }: { items: DashboardData["deadlines"]; da
   </section>;
 }
 
-function News({ items }: { items: DashboardData["news"] }) {
+function News({ items, newsBase }: { items: DashboardData["news"]; newsBase?: string }) {
   const unread = items.filter((item) => item.readAt === null).length;
   return <section className="panel news">
     <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><Megaphone size={20} /></span><div><h2>Уведомления и новости</h2><p className="muted">{unread ? unread + " новых" : "Объявления учебного офиса"}</p></div></div>
       {unread > 0 && <form action={markNotificationsRead}><Button variant="secondary" aria-label="Отметить прочитанными"><CheckCheck size={16} /> Отметить прочитанными</Button></form>}</div>
-    {items.length ? <div className="news-list">{items.map((item) => <article key={item.id} className={item.readAt === null ? "unread" : undefined}><h3>{item.title}{item.readAt === null && <span className="unread-dot" aria-label="Новое" />}</h3><p className="muted message-body">{item.body}</p></article>)}</div> : <Empty>Новостей пока нет</Empty>}
+    {items.length ? <div className="news-list">{items.map((item) => {
+      // Новости из ленты открываются отдельной страницей; личные уведомления — нет.
+      const href = newsBase && item.kind ? newsBase + item.id : undefined;
+      const content = <>
+        <h3>{item.title}{item.readAt === null && <span className="unread-dot" aria-label="Новое" />}
+          {item.kind && <span className={"pill " + newsKindClass(item.kind)}>{newsKindLabel(item.kind)}</span>}</h3>
+        <p className="muted message-body news-preview">{item.body}</p>
+        {href && <span className="news-open">Читать полностью <ArrowRight size={14} /></span>}
+      </>;
+      return <article key={item.id} className={item.readAt === null ? "unread" : undefined}>
+        {href ? <Link className="news-item-link" href={href} aria-label={"Открыть новость: " + item.title}>{content}</Link> : content}
+      </article>;
+    })}</div> : <Empty>Новостей пока нет</Empty>}
   </section>;
 }
 
@@ -253,8 +266,21 @@ export function Dashboard({ tab, day, data, role, name, monitor = false, streak,
   const [menu, setMenu] = useState(false);
   const [selectedDay, setSelectedDay] = useState("");
   const base = demo ? "/demo/" : "/cabinet/";
-  const nav = (className: string) => <nav className={className} aria-label="Основные разделы">{navigation.filter((item) => !(demo && item.id === "profile")).map(({ id, title, icon: Icon }) =>
-    <Link key={id} href={base + id} aria-current={tab === id ? "page" : undefined}><Icon size={21} /><span>{title}</span></Link>)}</nav>;
+  // Журнал старосты — в общем меню (слева на десктопе, внизу на мобильном),
+  // перед «Профилем», только для назначенного старосты.
+  type NavItem = { id: Tab | "journal"; title: string; icon: LucideIcon };
+  const navItems: NavItem[] = navigation.filter((item) => !(demo && item.id === "profile"));
+  if (monitor && !demo) {
+    const profileIndex = navItems.findIndex((item) => item.id === "profile");
+    navItems.splice(profileIndex < 0 ? navItems.length : profileIndex, 0, { id: "journal", title: "Журнал", icon: UserCheck });
+  }
+  const nav = (className: string) => <nav className={className} aria-label="Основные разделы">
+    {navItems.map(({ id, title, icon: Icon }) => <Link key={id} href={id === "journal" ? "/attendance" : base + id}
+      aria-label={id === "journal" ? "Журнал старосты" : undefined}
+      aria-current={tab === id ? "page" : undefined}>
+      <Icon size={21} /><span>{id === "journal" && className === "side-nav" ? "Журнал старосты" : title}</span>
+    </Link>)}
+  </nav>;
   const title = { today: "Сегодня", grades: "Успеваемость", services: "Сервисы деканата", map: "Карта кампуса", calendar: "Календарь дедлайнов", profile: "Профиль" }[tab];
 
   return <div className="app-shell">
@@ -270,7 +296,7 @@ export function Dashboard({ tab, day, data, role, name, monitor = false, streak,
       <div className="top-actions"><ThemeToggle /><div className="menu-anchor"><Button type="button" variant="icon" aria-label={menu ? "Закрыть меню" : "Открыть меню"} aria-expanded={menu} onClick={() => setMenu(!menu)}>{menu ? <X size={21} /> : <Menu size={21} />}</Button>
       {menu && <div className="panel account-menu" onKeyDown={(event) => { if (event.key === "Escape") setMenu(false); }}>
         <strong>{name}</strong><p className="muted">{role === "STAFF" ? "Сотрудник деканата" : "Студент"}</p>
-        {monitor && <Link className="text-link" href="/attendance">Журнал старосты</Link>}<div className="theme-setting">Тема интерфейса <ThemeToggle /></div>
+        <div className="theme-setting">Тема интерфейса <ThemeToggle /></div>
         {demo ? <Link className="text-link" href="/login"><Shield size={16} /> Вход с учётной записью</Link> :
           <form action={logout}><Button variant="secondary"><LogOut size={16} /> Выйти</Button></form>}
       </div>}</div></div>
@@ -301,7 +327,7 @@ export function Dashboard({ tab, day, data, role, name, monitor = false, streak,
             <Link className="panel route-link" href={base + "map"}><span className="soft-icon"><Route size={22} /></span><div><h2>Найти аудиторию</h2><p className="muted">Маршрут по кампусу</p></div><ArrowDownRight size={19} /></Link>
           </div>
         </div>
-        <News items={data.news} />
+        <News items={data.news} newsBase={demo ? undefined : "/cabinet/news/"} />
       </div>}
       {tab === "grades" && <Grades grades={data.grades} />}
       {tab === "profile" && <ProfileView />}

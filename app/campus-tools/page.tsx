@@ -20,8 +20,6 @@ export default async function CampusTools({ searchParams }: { searchParams: Prom
   const today = campusDay(now);
   const q = typeof params.q === "string" ? params.q.trim().slice(0, 120) : "";
   const windowDate = typeof params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.date) && Number.isFinite(Date.parse(params.date)) ? params.date : today;
-  const dayStart = new Date(windowDate + "T00:00:00+03:00");
-  const lessonWindow = { gte: dayStart, lt: new Date(+dayStart + 86400000) };
   const [slots, bookings, books, loans, holds, posts, entries, pass, personal, group] = await Promise.all([
     tab === "booking" ? availableSlots(db, user) : [],
     tab === "booking" ? db.campusBooking.findMany({ where: { userId: user.id }, include: { slot: true }, orderBy: { slot: { startsAt: "desc" } }, take: 30 }) : [],
@@ -34,19 +32,20 @@ export default async function CampusTools({ searchParams }: { searchParams: Prom
       orderBy: { title: "asc" }, include: { _count: { select: { loans: true, holds: true } } } }) : [],
     tab === "library" ? db.campusLoan.findMany({ where: { userId: user.id }, include: { book: true } }) : [],
     tab === "library" ? db.campusHold.findMany({ where: { userId: user.id } }) : [],
-    tab === "board" ? db.campusPost.findMany({ where: { OR: [{ userId: user.id }, { closed: false, expiresAt: { gt: now } }], category: categories.find((value) => value === params.category) },
+    tab === "board" ? db.campusPost.findMany({ where: { closed: false, expiresAt: { gt: now }, category: categories.find((value) => value === params.category) },
       include: { user: { select: { name: true } }, replies: { where: { OR: [{ userId: user.id }, { post: { userId: user.id } }] }, include: { user: { select: { name: true } } } } },
       orderBy: { createdAt: "desc" }, take: 50 }) : [],
     tab === "portfolio" ? db.campusPortfolio.findMany({ where: { userId: user.id }, orderBy: { occurredAt: "desc" } }) : [],
     tab === "profile" && typeof params.pass === "string" && /^[a-f0-9]{48}$/.test(params.pass) ? db.campusPass.findFirst({ where: {
       userId: user.id, digest: createHash("sha256").update(params.pass).digest("hex"), expiresAt: { gt: now },
     } }) : null,
-    tab === "booking" && params.window === "1" ? db.lesson.findMany({ where: { userId: user.id, startsAt: lessonWindow }, select: { startsAt: true, endsAt: true } }) : [],
-    tab === "booking" && params.window === "1" && user.groupId ? db.groupLesson.findMany({ where: { groupId: user.groupId, startsAt: lessonWindow }, select: { startsAt: true, endsAt: true } }) : [],
+    tab === "booking" ? db.lesson.findMany({ where: { userId: user.id, startsAt: { gte: new Date(today + "T00:00:00+03:00") } }, select: { startsAt: true, endsAt: true } }) : [],
+    tab === "booking" && user.groupId ? db.groupLesson.findMany({ where: { groupId: user.groupId, startsAt: { gte: new Date(today + "T00:00:00+03:00") } }, select: { startsAt: true, endsAt: true } }) : [],
   ]);
   const schedule = [...personal, ...group].sort((a, b) => +a.startsAt - +b.startsAt);
+  const windowSchedule = schedule.filter((item) => campusDay(item.startsAt) === windowDate);
   let previousEnd = 0;
-  const gaps = schedule.flatMap((item) => {
+  const gaps = windowSchedule.flatMap((item) => {
     const start = previousEnd + 600000;
     const end = +item.startsAt - 600000;
     const gap = previousEnd && start < end ? [{ start, end }] : [];
@@ -54,8 +53,26 @@ export default async function CampusTools({ searchParams }: { searchParams: Prom
     return gap;
   });
   const slotKind = Object.keys(slotLabels).find((value) => value === params.kind);
-  const visibleSlots = slots.filter((slot) => (!slotKind || slot.kind === slotKind) &&
-    (params.window !== "1" || (slot._count.bookings < slot.capacity && gaps.some((gap) => +slot.startsAt >= gap.start && +slot.endsAt <= gap.end))));
+  const overlaps = (start: number, end: number, range: { start: number; end: number }) => start < range.end && end > range.start;
+  const lessonRanges = schedule.map((lesson) => ({ start: +lesson.startsAt, end: +lesson.endsAt }));
+  const bookingRanges = bookings.map(({ slot }) => ({ start: +slot.startsAt, end: +slot.endsAt }));
+  // Не показываем варианты, которые пересекаются с парами или уже сделанными записями:
+  // иначе студент жмёт «Записаться» и получает ошибку «В это время у вас занятие».
+  const fitsSchedule = (slot: { startsAt: Date; endsAt: Date }) =>
+    !lessonRanges.some((range) => overlaps(+slot.startsAt, +slot.endsAt, range)) &&
+    !bookingRanges.some((range) => overlaps(+slot.startsAt, +slot.endsAt, range));
+  const fitsWindow = (slot: { startsAt: Date; endsAt: Date; capacity: number; _count: { bookings: number } }) =>
+    params.window !== "1" || (slot._count.bookings < slot.capacity && gaps.some((gap) => +slot.startsAt >= gap.start && +slot.endsAt <= gap.end));
+  const matchesKind = (slot: { kind: string }) => !slotKind || slot.kind === slotKind;
+  const visibleSlots = slots.filter((slot) => matchesKind(slot) && fitsWindow(slot) && fitsSchedule(slot));
+  const hiddenByConflict = slots.filter((slot) => matchesKind(slot) && fitsWindow(slot) && !fitsSchedule(slot)).length;
+  // Ближайшие записи сверху, прошедшие — в конце.
+  const sortedBookings = [...bookings].sort((left, right) => {
+    const leftPast = left.slot.startsAt < now ? 1 : 0;
+    const rightPast = right.slot.startsAt < now ? 1 : 0;
+    if (leftPast !== rightPast) return leftPast - rightPast;
+    return leftPast ? +right.slot.startsAt - +left.slot.startsAt : +left.slot.startsAt - +right.slot.startsAt;
+  });
   const passLink = pass ? new URL("/staff/campus/pass?token=" + params.pass, process.env.PUBLIC_ATTENDANCE_URL || process.env.AUTH_URL || "http://localhost:3000").href : "";
   const image = passLink ? await QRCode.toDataURL(passLink, { width: 240 }) : "";
   const shelf = new Set(loans.map((item) => item.bookId));
@@ -69,12 +86,18 @@ export default async function CampusTools({ searchParams }: { searchParams: Prom
     {params.error && <p className="form-error" role="alert">{params.error}</p>}
     {tab === "booking" && <>
       <section className="panel content-stack"><h2>Мои записи</h2>
-        {!bookings.length && <p className="empty">Записей пока нет</p>}
-        {bookings.map(({ slot, attended }) => <article className="staff-row campus-item" key={slot.id}>
-          <div><h3>{slot.title}</h3><p className="muted">{slotLabels[slot.kind]} · {dateLabel(slot.startsAt)}, {timeLabel(slot.startsAt)} МСК · {slot.place}</p>
-            {attended && <p>Посещение физкультуры подтверждено</p>}</div>
-          {slot.startsAt > now && <form action={booking}><input type="hidden" name="id" value={slot.id} /><Button name="command" value="cancel" variant="secondary">Отменить запись</Button></form>}
-        </article>)}
+        {!sortedBookings.length && <p className="empty">Записей пока нет</p>}
+        {sortedBookings.map(({ slot, attended }) => {
+          const past = slot.startsAt <= now;
+          return <article className="staff-row campus-item" key={slot.id}>
+            <div><h3>{slot.title}</h3><p className="muted">{slotLabels[slot.kind]} · {dateLabel(slot.startsAt)}, {timeLabel(slot.startsAt)} МСК · {slot.place}</p>
+              {attended && <p>Посещение физкультуры подтверждено</p>}
+              {past && <p className="muted">Запись прошла</p>}</div>
+            <form action={booking}><input type="hidden" name="id" value={slot.id} />
+              <Button name="command" value="cancel" variant="secondary">Отказаться от записи</Button>
+            </form>
+          </article>;
+        })}
       </section>
       <section className="panel content-stack"><h2>{params.window === "1" ? "Подходит для окна между парами" : "Доступные записи"}</h2>
         <form className="staff-fields"><input type="hidden" name="tab" value="booking" />
@@ -85,13 +108,14 @@ export default async function CampusTools({ searchParams }: { searchParams: Prom
           <Link className="text-link" href="/campus-tools?tab=library">Посмотреть книги в библиотеке</Link>
           <Link className="text-link" href={"/campus-tools?tab=booking&window=1&date=" + campusDay(plusDays(today, 1))}>Окна на завтра</Link>
         </div>}
+        {hiddenByConflict > 0 && <p className="muted">Скрыто вариантов, пересекающихся с парами или вашими записями: {hiddenByConflict}. Освободите время или выберите другой слот.</p>}
         {!visibleSlots.length && <p className="empty">Свободных вариантов по этим условиям пока нет</p>}
         {visibleSlots.map((slot) => {
           const seats = slot.capacity - slot._count.bookings;
           return <article key={slot.id} className="staff-row campus-item">
             <div><h3>{slot.title}</h3><p className="muted">{slotLabels[slot.kind]} · {dateLabel(slot.startsAt)}, {timeLabel(slot.startsAt)}–{timeLabel(slot.endsAt)} МСК</p>
               <p>{slot.place}{slot.staff ? " · " + slot.staff.name : ""} · Мест: {seats}</p></div>
-            <form action={booking}><input name="id" type="hidden" value={slot.id} /><Button disabled={!seats || !!slot.bookings.length}>{slot.bookings.length ? "Вы записаны" : seats ? "Записаться" : "Мест нет"}</Button></form>
+            <form action={booking}><input name="id" type="hidden" value={slot.id} /><Button disabled={!seats}>{seats ? "Записаться" : "Мест нет"}</Button></form>
           </article>;
         })}
       </section>
@@ -131,8 +155,8 @@ export default async function CampusTools({ searchParams }: { searchParams: Prom
       <form className="staff-fields" action={board}><input type="hidden" name="command" value="create" />
         <label>Категория<select name="category">{categories.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label>Заголовок<input required name="title" maxLength={120} /></label>
-        <label>Телефон для связи<input name="contactPhone" type="tel" maxLength={40} placeholder="необязательно" /></label>
-        <label>Email для связи<input name="contactEmail" type="email" maxLength={120} placeholder="необязательно" /></label>
+        <label>Телефон для связи<input name="contactPhone" type="tel" maxLength={40} placeholder="необязательно" suppressHydrationWarning /></label>
+        <label>Email для связи<input name="contactEmail" type="email" maxLength={120} placeholder="необязательно" suppressHydrationWarning /></label>
         <label className="staff-wide">Текст<textarea required name="body" maxLength={1000} /></label><Button>Опубликовать на 14 дней</Button>
       </form>
       <nav className="campus-nav" aria-label="Категории"><Link className="button button-secondary" href="/campus-tools?tab=board">Все</Link>

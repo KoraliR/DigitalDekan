@@ -22,8 +22,11 @@ const secureCookies = () => process.env.AUTH_URL?.startsWith("https://") ?? fals
 function shortenSessionCookie(jar: Awaited<ReturnType<typeof cookies>>) {
   for (const cookie of jar.getAll()) {
     if (!cookie.name.includes("session-token")) continue;
+    // Имя __Secure-… браузер принимает только с флагом Secure, даже если AUTH_URL
+    // ещё не переключён на https (например, при локальном dev-сервере с TLS).
+    const secure = cookie.name.startsWith("__Secure-") || secureCookies();
     jar.set(cookie.name, cookie.value, {
-      httpOnly: true, sameSite: "lax", path: "/", secure: secureCookies(),
+      httpOnly: true, sameSite: "lax", path: "/", secure,
     });
   }
 }

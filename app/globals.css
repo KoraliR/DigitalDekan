@@ -144,7 +144,7 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
 .login-card h1 + p { margin: 8px 0 17px; }
 .login-back { position: absolute; right: 14px; top: 14px; }
 .login-form { display: grid; gap: 7px; }
-.login-form > .button, .demo-link { width: 100%; margin-top: 10px; }
+.login-form > .button { width: 100%; margin-top: 10px; }
 .password-field { display: flex; width: 100%; position: relative; }
 .password-field input { padding-right: 46px; }
 .password-field .button { position: absolute; right: 1px; top: 1px; box-shadow: none; border: 0; background: transparent; }

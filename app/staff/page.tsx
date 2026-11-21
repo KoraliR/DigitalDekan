@@ -1,6 +1,6 @@
 import { displayStudent } from "@/lib/campus-tools";
 import { StaffRequestForm } from "@/components/staff-request-form";
-import { ArrowUpRight, BellRing, CalendarPlus, ChevronRight, Filter, Inbox, Megaphone, Plus, Send } from "lucide-react";
+import { ArrowUpRight, BellRing, CalendarPlus, ChevronRight, Filter, Inbox, Megaphone, Plus, Send, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 import { StaffCalendar } from "@/components/staff-calendar";
 import { GroupRoster } from "@/components/group-roster";
@@ -14,7 +14,8 @@ import { Prisma, RequestStatus, RequestType } from "@prisma/client";
 import { account, staffGroups, staffStudents } from "@/lib/access";
 import { db } from "@/lib/db";
 import { campusDay, dateLabel, plusDays, lessonTypes, services, statuses, timeLabel } from "@/lib/model";
-import { createDeadline, publish, saveGrade, saveLesson } from "./actions";
+import { newsAudienceLabel, newsKindClass, newsKindLabel } from "@/lib/news";
+import { createDeadline, deleteNews, publish, saveGrade, saveLesson } from "./actions";
 import { Button } from "@/components/ui/button";
 
 const sections = {
@@ -55,7 +56,7 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
       : status ? { status } : {}),
     ...(requestQuery ? { OR: [{ number: { contains: requestQuery, mode: "insensitive" } }, { id: { startsWith: requestQuery } }] } : {}),
   };
-  const [newCount, overdueCount, deadlines, requests, lessons, students, audit, groupDeadlines, inboxRequests, inboxLessons] = await Promise.all([
+  const [newCount, overdueCount, deadlines, requests, lessons, students, audit, groupDeadlines, inboxRequests, inboxLessons, newsList] = await Promise.all([
     section === "overview" ? db.serviceRequest.count({ where: { user: scope, status: "NEW" } }) : 0,
     section === "overview" ? db.serviceRequest.count({ where: { ...active, readyBy: { lt: now } } }) : 0,
     section === "overview" ? db.deadline.findMany({ where: { user: scope, dueAt: { gte: now } }, distinct: ["title", "course", "dueAt"], orderBy: { dueAt: "asc" }, take: 5 }) : [],
@@ -70,7 +71,9 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
       select: { id: true, name: true, studentProfile: { select: { groupId: true, surnameStress: true } }, grades: { orderBy: [{ term: "desc" }, { title: "asc" }] } },
     }) : [],
     section === "audit" ? db.auditEntry.findMany({
-      where: { groupId: { in: groups.map(({ id }) => id) } }, include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 100,
+      // Показываем и групповые записи, и общие действия (например, объявление для всех групп).
+      where: { OR: [{ groupId: { in: groups.map(({ id }) => id) } }, { groupId: null }] },
+      include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 100,
     }) : [],
     section === "deadlines" ? db.deadline.findMany({
       where: { user: staffStudents(user.id, groupId), dueAt: { gte: deadlineSince } },
@@ -90,8 +93,13 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
       select: { id: true, title: true, startsAt: true, groupId: true, group: { select: { name: true } } },
       orderBy: { startsAt: "asc" },
     }) : [],
+    section === "news" ? db.news.findMany({
+      orderBy: { createdAt: "desc" }, take: 100,
+      include: { author: { select: { name: true } } },
+    }) : [],
   ]);
   const groupOptions = groups.map(({ id, name }) => <option key={id} value={id}>{name}</option>);
+  const newsAudience = (audience: string) => newsAudienceLabel(audience, groups.map(({ id, name }) => ({ id, name })));
   const scheduleDays = [...new Set(lessons.filter((lesson) => !groupId || lesson.groupId === groupId).map((lesson) => campusDay(lesson.startsAt)))];
   type DeadlineBlock = { key: string; title: string; course: string; dueAt: Date; rows: { id: string; student: string; group: string; completed: boolean }[] };
   const deadlineBlocks = [...groupDeadlines.reduce((blocks, deadline) => {
@@ -183,16 +191,37 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
         comment={request.comment ?? ""} readyBy={request.readyBy ? campusDay(request.readyBy) : ""} /></details>)}
     </section>}
 
-    {section === "news" && <section className="panel"><h2>Новое объявление</h2><form className="staff-fields" action={publish}>
-      <label>Формат<select name="kind"><option value="news">Новость</option><option value="reminder">Напоминание</option></select></label>
-      <AudiencePicker groups={groups.map(({ id, name }) => ({ id, name }))}
-        faculties={[...new Set(groups.map(({ faculty }) => faculty))]}
-        courses={[...new Set(groups.map(({ course }) => course))]}
-        defaultValue={groupId ? "group:" + groupId : "all"} />
-      <label className="staff-wide">Заголовок<input name="title" maxLength={120} required /></label>
-      <label className="staff-wide">Текст<textarea name="body" maxLength={2000} required /></label>
-      <Button disabled={!groups.length}><Send size={16} /> Опубликовать</Button>
-    </form></section>}
+    {section === "news" && <div className="content-stack">
+      <section className="panel"><h2>Новое объявление</h2><form className="staff-fields" action={publish}>
+        <label>Формат<select name="kind"><option value="news">Новость</option><option value="reminder">Напоминание</option></select></label>
+        <AudiencePicker groups={groups.map(({ id, name }) => ({ id, name }))}
+          faculties={[...new Set(groups.map(({ faculty }) => faculty))]}
+          courses={[...new Set(groups.map(({ course }) => course))]}
+          defaultValue={groupId ? "group:" + groupId : "all"} />
+        <label className="staff-wide">Заголовок<input name="title" maxLength={120} required /></label>
+        <label className="staff-wide">Текст<textarea name="body" maxLength={2000} required /></label>
+        <Button disabled={!groups.length}><Send size={16} /> Опубликовать</Button>
+      </form></section>
+      <section className="panel">
+        <h2>Опубликованные новости</h2>
+        <p className="muted">Новость видят только студенты выбранной аудитории, в кабинете она открывается отдельной страницей.</p>
+        {!newsList.length && <p className="empty">Новостей пока нет</p>}
+        {newsList.map((news) => <details className="staff-row news-admin" key={news.id}>
+          <summary>
+            <span className={"pill " + newsKindClass(news.kind)}>{newsKindLabel(news.kind)}</span>
+            {" "}<strong>{news.title}</strong>
+            <span className="muted"> · {newsAudience(news.audience)} · {dateLabel(news.createdAt)}{news.author ? " · " + news.author.name : ""}</span>
+          </summary>
+          <div className="news-admin-body">
+            <p className="message-body">{news.body}</p>
+            <form action={deleteNews} className="staff-button-row">
+              <input type="hidden" name="id" value={news.id} />
+              <Button variant="danger"><Trash2 size={16} /> Удалить новость</Button>
+            </form>
+          </div>
+        </details>)}
+      </section>
+    </div>}
 
     {section === "schedule" && <div className="content-stack">
       <section className="panel">

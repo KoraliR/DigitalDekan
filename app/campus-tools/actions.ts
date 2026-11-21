@@ -43,8 +43,8 @@ export async function booking(data: FormData) {
     const slotId = field(form, "id");
     const key = { slotId, userId: user.id };
     if (form.get("command") === "cancel") {
-      const cancelled = await tx.campusBooking.deleteMany({ where: { ...key, slot: { startsAt: { gt: new Date() } } } });
-      requireInput(cancelled.count, "Отменить можно только предстоящую запись.");
+      const cancelled = await tx.campusBooking.deleteMany({ where: key });
+      requireInput(cancelled.count, "Запись не найдена.");
       return;
     }
     requireInput(slotId, "Выберите слот.");
@@ -87,17 +87,28 @@ export async function createSlot(data: FormData) {
     const conflict = await tx.campusSlot.findFirst({ where: { place, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } } });
     requireInput(!conflict, "Место уже занято в этот интервал.");
     await tx.campusSlot.create({ data: { kind, title, place, startsAt, endsAt, capacity, staffId: user.id, groupId, retakeTerm } });
+    await tx.auditEntry.create({ data: {
+      actorId: user.id, groupId,
+      summary: "Опубликован слот · " + title + " · " + slotLabels[kind as keyof typeof slotLabels] + " · " + dateLabel(startsAt) + ", " + timeLabel(startsAt) + " · " + place,
+    } });
   }, true);
 }
 
 export async function confirmSport(data: FormData) {
   await submit("slots", data, async (tx, user, form) => {
+    const studentId = field(form, "student");
     const updated = await tx.campusBooking.updateMany({ where: {
-      slotId: field(form, "id"), userId: field(form, "student"),
+      slotId: field(form, "id"), userId: studentId,
       slot: { staffId: user.id, kind: "SPORT", startsAt: { lte: new Date() } },
       user: staffStudents(user.id),
     }, data: { attended: true } });
     if (!updated.count) forbidden();
+    const student = await tx.user.findFirst({ where: { id: studentId, ...staffStudents(user.id) },
+      select: { name: true, studentProfile: { select: { groupId: true } } } });
+    await tx.auditEntry.create({ data: {
+      actorId: user.id, groupId: student?.studentProfile?.groupId ?? null,
+      summary: "Подтверждено посещение физкультуры · " + (student?.name ?? "студент"),
+    } });
   }, true);
 }
 
@@ -159,8 +170,16 @@ export async function board(data: FormData) {
 
 export async function moderatePost(data: FormData) {
   await submit("board", data, async (tx, user, form) => {
-    await tx.campusPost.updateMany({ where: { id: field(form, "id"), flagged: true, user: staffStudents(user.id) },
-      data: { flagged: false, ...(form.get("command") === "close" ? { closed: true } : {}) } });
+    const id = field(form, "id");
+    const command = form.get("command");
+    const post = await tx.campusPost.findFirst({ where: { id, flagged: true, user: staffStudents(user.id) },
+      select: { id: true, title: true, user: { select: { studentProfile: { select: { groupId: true } } } } } });
+    requireInput(post, "Объявление с жалобой не найдено.");
+    await tx.campusPost.update({ where: { id: post.id }, data: { flagged: false, ...(command === "close" ? { closed: true } : {}) } });
+    await tx.auditEntry.create({ data: {
+      actorId: user.id, groupId: post.user.studentProfile?.groupId ?? null,
+      summary: (command === "close" ? "Закрыто объявление · " : "Снята жалоба с объявления · ") + post.title,
+    } });
   }, true);
 }
 

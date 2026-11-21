@@ -18,7 +18,7 @@ export function PasswordField({ id, name, autoComplete, value, onChange, require
   return <span className="password-field">
     <input id={id} name={name} type={visible ? "text" : "password"} autoComplete={autoComplete} required={required}
       value={value} onChange={onChange ? (event) => onChange(event.target.value) : undefined}
-      aria-invalid={invalid || undefined} aria-describedby={describedBy} />
+      aria-invalid={invalid || undefined} aria-describedby={describedBy} suppressHydrationWarning />
     <Button variant="icon" type="button" aria-label={visible ? "Скрыть пароль" : "Показать пароль"} onClick={() => setVisible(!visible)}>
       {visible ? <EyeOff size={18} /> : <Eye size={18} />}
     </Button>

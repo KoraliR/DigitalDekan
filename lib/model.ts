@@ -106,5 +106,5 @@ export interface DashboardData {
   grades: { id: string; title: string; score: number; threshold: number; term: number; assessment: AssessmentType | null; finalGrade: number | null; passed: boolean | null; practiceScore: number | null; attendanceScore: number | null; controlScore: number | null }[];
   deadlines: DeadlineView[];
   requests: RequestView[];
-  news: { id: string; title: string; body: string; readAt?: string | null }[];
+  news: { id: string; title: string; body: string; readAt?: string | null; kind?: string | null; createdAt?: string }[];
 }

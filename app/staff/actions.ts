@@ -5,6 +5,7 @@ import { forbidden, redirect } from "next/navigation";
 import { account, staffGroups, staffStudents } from "@/lib/access";
 import { db } from "@/lib/db";
 import { attendanceStatuses, campusDay, dateLabel, services, statuses, timeLabel } from "@/lib/model";
+import { newsAudienceLabel, newsKindLabel } from "@/lib/news";
 import { transitions } from "@/lib/workflow";
 
 function field(form: FormData, key: string, max: number) {
@@ -103,17 +104,38 @@ export async function publish(form: FormData) {
     const value = index < 0 ? "" : selected.slice(index + 1);
     const title = field(input, "title", 120);
     const body = field(input, "body", 2000);
+    const newsKind = field(input, "kind", 15) === "reminder" ? "reminder" : "news";
     requireInput(title && body && ["all", "faculty", "course", "group"].includes(kind), "Заполните заголовок, текст и аудиторию.");
     const groups = await tx.studyGroup.findMany({ where: {
       ...staffGroups(staffId),
       ...(kind === "faculty" ? { faculty: value } : {}),
       ...(kind === "course" ? { course: Number(value) } : {}),
       ...(kind === "group" ? { id: value } : {}),
-    }, select: { id: true } });
-    const recipients = await tx.user.findMany({ where: staffStudents(staffId, { in: groups.map((group) => group.id) }), select: { id: true } });
-    requireInput(recipients.length, "В этой аудитории нет доступных студентов.");
-    const prefix = field(input, "kind", 15) === "reminder" ? "Напоминание · " : "";
-    await tx.notification.createMany({ data: recipients.map(({ id }) => ({ userId: id, title: prefix + title, body })) });
+    }, select: { id: true, name: true } });
+    requireInput(groups.length, "В этой аудитории нет доступных групп.");
+    const recipients = await tx.user.count({ where: staffStudents(staffId, { in: groups.map((group) => group.id) }) });
+    requireInput(recipients, "В этой аудитории нет доступных студентов.");
+    // Аудитория хранится в новости: студенты увидят её через фильтр видимости.
+    // «Все закреплённые группы» привязываем к сотруднику, чтобы не показывать
+    // объявление студентам чужих групп.
+    const audience = kind === "all" ? "staff:" + staffId : selected;
+    await tx.news.create({ data: { title, body, kind: newsKind, audience, createdById: staffId } });
+    await tx.auditEntry.create({ data: {
+      actorId: staffId,
+      groupId: kind === "group" ? value : null,
+      summary: newsKindLabel(newsKind) + " · " + title + " · " + newsAudienceLabel(audience, groups),
+    } });
+  });
+}
+
+export async function deleteNews(form: FormData) {
+  await mutate("news", form, async (tx, staffId, input) => {
+    const id = field(input, "id", 100);
+    const news = await tx.news.findFirst({ where: { id }, select: { id: true, title: true, audience: true } });
+    requireInput(news, "Новость не найдена.");
+    await tx.news.delete({ where: { id: news.id } });
+    const groupId = news.audience.startsWith("group:") ? news.audience.slice("group:".length) : null;
+    await tx.auditEntry.create({ data: { actorId: staffId, groupId, summary: "Удалена новость · " + news.title } });
   });
 }
 
@@ -166,6 +188,10 @@ export async function saveLesson(form: FormData) {
       userId: student.id, title: (moved ? "Перенос занятия · " : id ? "Изменение занятия · " : "Новое занятие · ") + title,
       body: (moved ? oldTime + " → " + newTime : newTime) + (comment ? "\n" + comment : ""),
     })) });
+    await tx.auditEntry.create({ data: {
+      actorId: staffId, groupId,
+      summary: (id ? (moved ? "Перенос занятия" : "Изменение занятия") : "Новое занятие") + " · " + title + " · " + newTime,
+    } });
   });
 }
 

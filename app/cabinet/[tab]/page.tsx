@@ -3,18 +3,28 @@ import { Dashboard } from "@/components/dashboard";
 import { account } from "@/lib/access";
 import { db } from "@/lib/db";
 import { campusDay, type LessonView } from "@/lib/model";
+import { studentNewsAudiences } from "@/lib/news";
 import { validTab } from "@/lib/tabs";
 
 export default async function Cabinet({ params, searchParams }: { params: Promise<{ tab: string }>; searchParams: Promise<{ room?: string | string[] }> }) {
   const user = await account("STUDENT");
   const tab = validTab((await params).tab);
   const { room } = await searchParams;
+  // Новости видны только подходящей аудитории: общие, своей группе/факультету/курсу
+  // и объявления сотрудников, закреплённых за этой группой.
+  const group = tab === "today" && user.groupId
+    ? await db.studyGroup.findUnique({ where: { id: user.groupId }, select: { id: true, faculty: true, course: true } })
+    : null;
+  const staffIds = tab === "today" && user.groupId
+    ? (await db.staffProfile.findMany({ where: { groups: { some: { id: user.groupId } } }, select: { userId: true } })).map((item) => item.userId)
+    : [];
+  const newsAudiences = studentNewsAudiences(group, staffIds);
   const [lessons, grades, deadlines, requests, news, groupLessons, notifications, attendance, streak, libraryLoans, campusBookings] = await Promise.all([
     tab === "today" || tab === "map" ? db.lesson.findMany({ where: { userId: user.id }, orderBy: { startsAt: "asc" } }) : [],
     tab === "grades" ? db.grade.findMany({ where: { userId: user.id }, orderBy: { term: "desc" } }) : [],
     tab === "today" || tab === "calendar" ? db.deadline.findMany({ where: { userId: user.id }, orderBy: { dueAt: "asc" } }) : [],
     tab === "services" ? db.serviceRequest.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }) : [],
-    tab === "today" ? db.news.findMany({ orderBy: { createdAt: "desc" } }) : [],
+    tab === "today" ? db.news.findMany({ where: { audience: { in: newsAudiences } }, orderBy: { createdAt: "desc" } }) : [],
     user.groupId && (tab === "today" || tab === "map") ? db.groupLesson.findMany({ where: { groupId: user.groupId }, include: { group: { select: { name: true } }, marks: { where: { userId: user.id } } } }) : [],
     tab === "today" ? db.notification.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } }) : [],
     tab === "today" ? db.attendance.findMany({ where: { userId: user.id } }) : [],
@@ -71,8 +81,8 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
       updatedAt: (request.updatedAt ?? request.createdAt).toISOString(),
     })),
     news: [
-      ...notifications.map((item) => ({ id: item.id, title: item.title, body: item.body, readAt: item.readAt?.toISOString() ?? null, at: +item.createdAt })),
-      ...news.map((item) => ({ id: item.id, title: item.title, body: item.body, readAt: undefined as string | undefined, at: +item.createdAt })),
-    ].sort((left, right) => right.at - left.at).map(({ id, title, body, readAt }) => ({ id, title, body, readAt })),
+      ...notifications.map((item) => ({ id: item.id, title: item.title, body: item.body, readAt: item.readAt?.toISOString() ?? null, kind: null, createdAt: item.createdAt.toISOString(), at: +item.createdAt })),
+      ...news.map((item) => ({ id: item.id, title: item.title, body: item.body, readAt: undefined as string | undefined, kind: item.kind, createdAt: item.createdAt.toISOString(), at: +item.createdAt })),
+    ].sort((left, right) => right.at - left.at).map(({ id, title, body, readAt, kind, createdAt }) => ({ id, title, body, readAt, kind, createdAt })),
   }} />;
 }

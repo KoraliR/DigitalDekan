@@ -8,10 +8,15 @@ import { NextResponse, type NextRequest } from "next/server";
  * из-за чего «Запомнить меня» ни на что не влияло. Здесь мы только читаем токен.
  */
 export async function proxy(request: NextRequest) {
+  // За TLS-прокси (nginx/Caddy/Traefik) сокет может быть http, а публичный адрес —
+  // https: учитываем X-Forwarded-Proto, иначе имя secure-cookie (__Secure-…)
+  // не совпадёт и пользователя будет кидать на вход.
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const isSecure = (forwardedProto ? forwardedProto.split(",")[0].trim() : request.nextUrl.protocol.replace(":", "")) === "https";
   const token = await getToken({
     req: request,
     secret: process.env.AUTH_SECRET,
-    secureCookie: request.nextUrl.protocol === "https:",
+    secureCookie: isSecure,
   });
   if (!token?.sub) {
     const login = new URL(request.nextUrl.pathname.startsWith("/staff") ? "/staff-login" : "/login", request.url);
