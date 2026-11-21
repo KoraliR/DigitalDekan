@@ -5,7 +5,7 @@ import { forbidden, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { account, staffGroups, staffStudents } from "@/lib/access";
 import { db } from "@/lib/db";
-import { availableSlots, categories, displayStudent, portfolioKinds, publicUrl, serializable, slotLabels } from "@/lib/campus-tools";
+import { availableSlots, categories, portfolioKinds, publicUrl, serializable, slotLabels } from "@/lib/campus-tools";
 import { dateLabel, timeLabel } from "@/lib/model";
 
 function field(data: FormData, key: string, max = 120) {
@@ -132,8 +132,15 @@ export async function board(data: FormData) {
       const title = field(form, "title");
       const body = field(form, "body", 1000);
       const category = categories.find((value) => value === form.get("category"));
+      const contactPhone = field(form, "contactPhone", 40) || null;
+      const contactEmail = field(form, "contactEmail", 120) || null;
       requireInput(title && body && category, "Заполните объявление.");
-      await tx.campusPost.create({ data: { userId: user.id, title, body, category, expiresAt: new Date(Date.now() + 14 * 86400000) } });
+      if (contactPhone) {
+        requireInput(/^[\d\s+\-()]+$/.test(contactPhone) && contactPhone.replace(/\D/g, "").length >= 5,
+          "Проверьте телефон: минимум 5 цифр, допустимы цифры, пробелы и символы + - ( ).");
+      }
+      if (contactEmail) requireInput(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail), "Проверьте email для связи.");
+      await tx.campusPost.create({ data: { userId: user.id, title, body, category, contactPhone, contactEmail, expiresAt: new Date(Date.now() + 14 * 86400000) } });
     } else if (command === "close") {
       await tx.campusPost.updateMany({ where: { id, userId: user.id }, data: { closed: true } });
     } else {
@@ -177,15 +184,6 @@ export async function portfolio(data: FormData) {
         && (!rawLink || link), "Заполните карточку и проверьте ссылку.");
       await tx.campusPortfolio.create({ data: { userId: user.id, title, description, occurredAt, kind, link } });
     }
-  });
-}
-
-export async function surname(data: FormData) {
-  await submit("profile", data, async (tx, user, form) => {
-    const value = field(form, "stress", 3);
-    const stress = value ? Number(value) : null;
-    requireInput(stress === null || (Number.isInteger(stress) && stress >= 0 && displayStudent(user.name, stress) !== user.name), "Выберите гласную в фамилии.");
-    await tx.studentProfile.upsert({ where: { userId: user.id }, create: { userId: user.id, surnameStress: stress }, update: { surnameStress: stress } });
   });
 }
 

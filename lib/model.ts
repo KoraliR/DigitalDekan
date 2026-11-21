@@ -36,6 +36,11 @@ export const assessments: Record<AssessmentType, { label: string; className: str
   TEST: { label: "Зачёт", className: "test" },
   COURSEWORK: { label: "Курсовая работа", className: "warn" },
 };
+export const gradeBreakdown = [
+  { key: "practiceScore", label: "Практики", max: 40 },
+  { key: "attendanceScore", label: "Посещения", max: 20 },
+  { key: "controlScore", label: "Контрольные работы", max: 40 },
+] as const;
 const gradeWords = ["", "", "Неудовлетворительно", "Удовлетворительно", "Хорошо", "Отлично"];
 export function finalGradeLabel(grade: { assessment: AssessmentType | null; finalGrade: number | null; passed: boolean | null }) {
   if (grade.assessment === "TEST") {
@@ -98,7 +103,7 @@ export function daysBetween(from: string, to: string) {
 }
 export interface DashboardData {
   lessons: LessonView[];
-  grades: { id: string; title: string; score: number; threshold: number; term: number; assessment: AssessmentType | null; finalGrade: number | null; passed: boolean | null }[];
+  grades: { id: string; title: string; score: number; threshold: number; term: number; assessment: AssessmentType | null; finalGrade: number | null; passed: boolean | null; practiceScore: number | null; attendanceScore: number | null; controlScore: number | null }[];
   deadlines: DeadlineView[];
   requests: RequestView[];
   news: { id: string; title: string; body: string; readAt?: string | null }[];

@@ -1,11 +1,13 @@
 import Link from "next/link";
-import { CalendarDays, CalendarClock, ClipboardList, GraduationCap, History, LayoutDashboard, Megaphone, UserCheck } from "lucide-react";
+import { Building2, CalendarDays, CalendarClock, ClipboardList, GraduationCap, History, LayoutDashboard, Megaphone, UserCheck, type LucideIcon } from "lucide-react";
 import { logout } from "@/app/actions";
 import { ThemeToggle } from "@/components/theme";
 import { Button } from "@/components/ui/button";
 import { PasswordDialog } from "@/components/password-dialog";
 
-const tabs = [
+type StaffTab = { id: string; label: string; icon: LucideIcon; href?: string };
+
+const tabs: StaffTab[] = [
   { id: "overview", label: "Обзор", icon: LayoutDashboard },
   { id: "requests", label: "Заявки", icon: ClipboardList },
   { id: "news", label: "Новости", icon: Megaphone },
@@ -13,6 +15,7 @@ const tabs = [
   { id: "attendance", label: "Посещение", icon: UserCheck },
   { id: "deadlines", label: "Дедлайны", icon: CalendarClock },
   { id: "grades", label: "Оценки", icon: GraduationCap },
+  { id: "campus", label: "Сервисы кампуса", icon: Building2, href: "/staff/campus" },
   { id: "audit", label: "Аудит", icon: History },
 ];
 
@@ -23,10 +26,9 @@ export function StaffShell({ name, section, children }: { name: string; section:
       <div className="top-actions"><ThemeToggle /><PasswordDialog /><form action={logout}><Button variant="secondary">Выйти</Button></form></div>
     </header>
     <p className="notice">Концепт для конкурса. Не является официальным сервисом вуза</p>
-    <Link className="button button-secondary campus-staff-link" href="/staff/campus" aria-current={section === "campus" ? "page" : undefined}>Сервисы кампуса</Link>
     <nav className="staff-nav" aria-label="Служебные разделы">
-      {tabs.map(({ id, label, icon: Icon }) =>
-        <Link key={id} href={"/staff?section=" + id} aria-current={section === id ? "page" : undefined}>
+      {tabs.map(({ id, label, icon: Icon, href }) =>
+        <Link key={id} href={href ?? "/staff?section=" + id} aria-current={section === id ? "page" : undefined}>
           <Icon size={19} aria-hidden="true" /><span>{label}</span>
         </Link>)}
     </nav>

@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { AttendanceStatus } from "@prisma/client";
 import { forbidden, redirect } from "next/navigation";
 import { account, staffGroups } from "@/lib/access";
+import { markAttendanceByToken } from "@/lib/attendance-qr";
 import { db } from "@/lib/db";
 
 export async function groupAttendance(form: FormData) {
@@ -44,14 +45,7 @@ export async function groupAttendance(form: FormData) {
 
 export async function scanAttendance(form: FormData) {
   const actor = await account("STUDENT");
-  const token = String(form.get("token") ?? "");
-  const qr = await db.attendanceQr.findFirst({ where: {
-    token, expiresAt: { gt: new Date() }, lesson: { group: { students: { some: { userId: actor.id } } } },
-  } });
-  if (!qr) forbidden();
-  await db.groupAttendance.upsert({
-    where: { lessonId_userId: { lessonId: qr.lessonId, userId: actor.id } },
-    create: { lessonId: qr.lessonId, userId: actor.id, status: "PRESENT" }, update: {},
-  });
+  const result = await markAttendanceByToken(actor.id, form.get("token"));
+  if (!result.ok) forbidden();
   redirect("/attendance/check?done=1");
 }

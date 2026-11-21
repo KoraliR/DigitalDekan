@@ -9,6 +9,25 @@ import { db } from "@/lib/db";
 import { signIn, signOut } from "@/auth";
 import { account } from "@/lib/access";
 
+/** Cookie-маркер «Запомнить меня» живёт между шагами входа и не дольше 5 минут. */
+const REMEMBER_COOKIE = "dekanat-remember";
+const REMEMBER_COOKIE_MAX_AGE = 300;
+const secureCookies = () => process.env.AUTH_URL?.startsWith("https://") ?? false;
+
+/**
+ * Без «Запомнить меня» cookie сессии должна быть сессионной: браузер удаляет её
+ * при закрытии, поэтому «запомнить» даёт заметную разницу. JWT при этом всё равно
+ * живёт 8 часов (см. auth.ts), а не 30 дней.
+ */
+function shortenSessionCookie(jar: Awaited<ReturnType<typeof cookies>>) {
+  for (const cookie of jar.getAll()) {
+    if (!cookie.name.includes("session-token")) continue;
+    jar.set(cookie.name, cookie.value, {
+      httpOnly: true, sameSite: "lax", path: "/", secure: secureCookies(),
+    });
+  }
+}
+
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function rateLimited(key: string, limit = 10, windowMs = 10 * 60_000) {
@@ -31,15 +50,26 @@ export async function startLogin(form: FormData) {
   const login = form.get("login");
   const password = form.get("password");
   if (typeof login !== "string" || login.length > 80 || typeof password !== "string" ||
-      Buffer.byteLength(password) > 72 || !password.length) return { error: "Проверьте логин и пароль." };
+      Buffer.byteLength(password) > 72 || !password.length) return { error: "Введите логин и пароль." };
+  const entry = form.get("entry") === "staff" ? "staff" : "student";
+  const expectedRole = entry === "staff" ? "STAFF" : "STUDENT";
   const agent = (await headers()).get("x-forwarded-for") ?? "local";
   const key = login.trim().toLowerCase() + "|" + agent;
-  if (rateLimited(key)) return { error: "Слишком много попыток входа. Попробуйте позже." };
+  if (rateLimited(key)) return { error: "Слишком много неудачных попыток. Подождите 10 минут и попробуйте снова." };
   try {
     const user = await db.user.findUnique({ where: { login: login.trim().toLowerCase() } });
     const dummy = "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxcdI6XG2nRf3TRMQ9RnsUq2mEu";
     const valid = await compare(password, user?.passwordHash ?? dummy);
-    if (!user || !valid || user.role !== (form.get("entry") === "staff" ? "STAFF" : "STUDENT")) return { error: "Проверьте логин и пароль." };
+    if (!user || !valid) {
+      console.warn("[auth] вход отклонён: неверный логин или пароль (" + entry + ")");
+      return { error: "Неверный логин или пароль. Проверьте раскладку и Caps Lock." };
+    }
+    if (user.role !== expectedRole) {
+      console.warn("[auth] вход отклонён: аккаунт " + user.role + " на форме " + entry);
+      return { error: user.role === "STAFF"
+        ? "Это аккаунт сотрудника. Откройте вкладку «Вход сотрудника»."
+        : "Это аккаунт студента. Откройте вкладку «Вход студента»." };
+    }
     loginAttempts.delete(key);
 
     const jar = await cookies();
@@ -57,7 +87,14 @@ export async function startLogin(form: FormData) {
     ]);
     jar.set("dekanat-challenge", id, {
       httpOnly: true, sameSite: "strict", path: "/", maxAge: 300,
-      secure: process.env.AUTH_URL?.startsWith("https://") ?? false,
+      secure: secureCookies(),
+    });
+    // Флаг «Запомнить меня» приходит из формы первого шага. Держим его в
+    // короткоживущей cookie: между шагами форма перерисовывается, а сам флаг
+    // нужен только finishLogin при вызове signIn.
+    jar.set(REMEMBER_COOKIE, form.get("remember") === "1" ? "1" : "0", {
+      httpOnly: true, sameSite: "strict", path: "/", maxAge: REMEMBER_COOKIE_MAX_AGE,
+      secure: secureCookies(),
     });
     return { code };
   } catch {
@@ -67,17 +104,31 @@ export async function startLogin(form: FormData) {
 
 export async function finishLogin(form: FormData) {
   const jar = await cookies();
+  const remember = jar.get(REMEMBER_COOKIE)?.value === "1";
   try {
     const url = await signIn("credentials", {
       challenge: jar.get("dekanat-challenge")?.value ?? "",
       code: form.get("code"),
+      remember: remember ? "1" : "0",
       redirectTo: "/account", redirect: false,
     });
-    if (typeof url !== "string" || url.includes("error=")) return { error: "Код неверен или истёк." };
-    jar.delete("dekanat-challenge");
+    if (typeof url !== "string" || url.includes("error=")) return { error: "Код неверен или истёк. Нажмите «Назад» и начните вход заново." };
+    // Cookie-операции не должны ронять уже успешный вход: сессия выставлена signIn.
+    try {
+      jar.delete("dekanat-challenge");
+      jar.delete(REMEMBER_COOKIE);
+      // session.maxAge настроен на 30 дней, чтобы долгая cookie переживала
+      // обновления сессии; для обычного входа сокращаем cookie до 8 часов.
+      if (!remember) shortenSessionCookie(jar);
+    } catch (cookieError) {
+      console.warn("[auth] не удалось обновить cookie после входа:", cookieError);
+    }
     return { url: "/account" };
   } catch (error) {
-    if (error instanceof AuthError) return { error: "Код неверен или истёк. Проверьте код либо начните заново." };
+    if (error instanceof AuthError) {
+      console.warn("[auth] код подтверждения не принят:", error.type);
+      return { error: "Код неверен или истёк. Проверьте код либо начните вход заново." };
+    }
     throw error;
   }
 }

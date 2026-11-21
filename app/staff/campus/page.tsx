@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Filter } from "lucide-react";
 import { StaffShell } from "@/components/staff-shell";
 import { Button } from "@/components/ui/button";
 import { account, staffGroups, staffStudents } from "@/lib/access";
@@ -7,19 +8,39 @@ import { displayStudent, slotLabels } from "@/lib/campus-tools";
 import { dateLabel, timeLabel } from "@/lib/model";
 import { confirmSport, createSlot, moderatePost } from "@/app/campus-tools/actions";
 
+// Поиск по ФИО: в базе имена без знаков ударения, но пользователь может набрать «ё» вместо «е»
+// или вставить фамилию прямо из карточки (там ударение — комбинирующий символ U+0301).
+// NFC собирает «ё»/«й» обратно, затем убираем знаки ударения и служебные символы LIKE.
+function normalizeSearch(value: string) {
+  return value.normalize("NFC").replace(/[\u0300-\u036f]/g, "").replace(/[%_\\]/g, "").trim();
+}
+// Ищем оба варианта написания: «Пётр» должен найти «Петров», а «Федорова» — «Фёдорова».
+function searchVariants(value: string) {
+  const query = normalizeSearch(value).toLowerCase();
+  if (!query) return [];
+  return [...new Set([query, query.replace(/ё/g, "е"), query.replace(/е/g, "ё")])];
+}
+
 export default async function CampusAdmin({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const user = await account("STAFF");
   const params = await searchParams;
   const tab = params.tab ?? "slots";
   const scope = staffStudents(user.id);
-  const [groups, slots, reports, portfolio] = await Promise.all([
-    db.studyGroup.findMany({ where: staffGroups(user.id), orderBy: { name: "asc" } }),
+  const groups = await db.studyGroup.findMany({ where: staffGroups(user.id), orderBy: { name: "asc" } });
+  const search = typeof params.q === "string" ? params.q : "";
+  const variants = searchVariants(search);
+  const groupId = groups.find(({ id }) => id === params.group)?.id;
+  const portfolioFiltered = variants.length > 0 || Boolean(groupId);
+  const portfolioNameFilter = variants.length
+    ? { OR: variants.map((name) => ({ name: { contains: name, mode: "insensitive" as const } })) }
+    : {};
+  const [slots, reports, portfolio] = await Promise.all([
     tab === "slots" ? db.campusSlot.findMany({ where: { staffId: user.id }, include: {
       bookings: { where: { user: scope }, include: { user: { select: { name: true, studentProfile: { select: { surnameStress: true } } } } } },
     }, orderBy: { startsAt: "desc" }, take: 50 }) : [],
     tab === "board" ? db.campusPost.findMany({ where: { flagged: true, user: scope }, orderBy: { createdAt: "desc" }, take: 50 }) : [],
-    tab === "portfolio" ? db.campusPortfolio.findMany({ where: { shared: true, user: scope }, include: {
-      user: { select: { name: true, studentProfile: { select: { surnameStress: true } } } },
+    tab === "portfolio" ? db.campusPortfolio.findMany({ where: { shared: true, user: { ...staffStudents(user.id, groupId), ...portfolioNameFilter } }, include: {
+      user: { select: { name: true, studentProfile: { select: { surnameStress: true, group: { select: { name: true } } } } } },
     }, orderBy: { occurredAt: "desc" }, take: 50 }) : [],
   ]);
   return <StaffShell name={user.name} section="campus">
@@ -66,9 +87,23 @@ export default async function CampusAdmin({ searchParams }: { searchParams: Prom
         </form></article>)}
     </section>}
     {tab === "portfolio" && <section className="panel content-stack"><h3>Открытые работы студентов</h3>
-      {!portfolio.length && <p className="empty">В ваших группах пока нет открытых работ</p>}
+      <form className="staff-fields" action="/staff/campus" method="get">
+        <input type="hidden" name="tab" value="portfolio" />
+        <label>Поиск по студенту<input type="search" name="q" aria-label="Поиск по студенту" placeholder="Фамилия или имя" defaultValue={search} /></label>
+        <label>Группа<select name="group" defaultValue={groupId ?? ""}>
+          <option value="">Все группы</option>
+          {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+        </select></label>
+        <div className="staff-button-row">
+          <Button variant="secondary"><Filter size={16} aria-hidden="true" /> Применить фильтры</Button>
+          <Link className="text-link" href="/staff/campus?tab=portfolio">Сбросить</Link>
+        </div>
+      </form>
+      {!portfolio.length && (portfolioFiltered
+        ? <p className="empty">Ничего не найдено. Попробуйте изменить запрос или <Link className="text-link" href="/staff/campus?tab=portfolio">сбросить фильтры</Link>.</p>
+        : <p className="empty">В ваших группах пока нет открытых работ</p>)}
       {portfolio.map((entry) => <article className="staff-row" key={entry.id}><h3>{entry.title}</h3>
-        <p className="muted">{displayStudent(entry.user.name, entry.user.studentProfile?.surnameStress)} · {entry.kind} · {dateLabel(entry.occurredAt)}</p>
+        <p className="muted">{displayStudent(entry.user.name, entry.user.studentProfile?.surnameStress)} · {entry.user.studentProfile?.group?.name ?? "Группа не указана"} · {entry.kind} · {dateLabel(entry.occurredAt)}</p>
         <p className="message-body">{entry.description}</p>{entry.link && <a className="text-link" href={entry.link} rel="noreferrer">Открыть результат</a>}
       </article>)}
     </section>}

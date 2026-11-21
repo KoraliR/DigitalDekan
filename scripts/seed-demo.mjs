@@ -205,13 +205,16 @@ try {
       for (let term = 1; term <= 4; term += 1) {
         const assessment = assessmentOf(title);
         const score = 44 + ((index * 7 + term * 11 + person.login.length * 3) % 47);
+        const practiceScore = Math.min(40, Math.round(score * 0.4));
+        const attendanceScore = Math.min(20, Math.round(score * 0.2));
+        const controlScore = Math.max(0, score - practiceScore - attendanceScore);
         const past = term < 4;
         const finalGrade = !past ? null : assessment === "TEST" ? null : 2 + ((index + term + person.login.length) % 4);
         const passed = !past || assessment !== "TEST" ? null : (index + term + person.login.length) % 7 !== 0;
         await db.grade.create({ data: {
           userId: users.get(person.login).id, title, term, score, threshold: 60, assessment,
           finalGrade: finalGrade && finalGrade < 2 ? 2 : finalGrade,
-          passed,
+          passed, practiceScore, attendanceScore, controlScore,
         } });
       }
     }
@@ -300,20 +303,20 @@ try {
   ] });
 
   const books = [
-    ["Базы данных: практикум", "Л. Облачный"],
-    ["Основы алгоритмов", "М. Янтарная"],
-    ["Компьютерные сети", "Р. Лунин"],
-    ["Проектирование интерфейсов", "А. Волкова"],
-    ["Дискретная математика", "И. Гусев"],
-    ["История информатики", "Е. Соколова"],
-    ["Английский для ИТ", "Н. Морозова"],
-    ["Безопасность жизнедеятельности", "П. Орлов"],
-    ["Веб-разработка", "Д. Белов"],
-    ["Математический анализ", "С. Тимофеев"],
+    ["Базы данных: практикум", "Л. Облачный", "978-5-97060-101-1"],
+    ["Основы алгоритмов", "М. Янтарная", "978-5-97060-102-8"],
+    ["Компьютерные сети", "Р. Лунин", "978-5-97060-103-5"],
+    ["Проектирование интерфейсов", "А. Волкова", "978-5-97060-104-2"],
+    ["Дискретная математика", "И. Гусев", "978-5-97060-105-9"],
+    ["История информатики", "Е. Соколова", "978-5-97060-106-6"],
+    ["Английский для ИТ", "Н. Морозова", "978-5-97060-107-3"],
+    ["Безопасность жизнедеятельности", "П. Орлов", "978-5-97060-108-0"],
+    ["Веб-разработка", "Д. Белов", "978-5-97060-109-7"],
+    ["Математический анализ", "С. Тимофеев", "978-5-97060-110-3"],
   ];
   const bookRows = new Map();
-  for (const [title, author] of books) {
-    bookRows.set(title, await db.campusBook.create({ data: { title, author } }));
+  for (const [title, author, isbn] of books) {
+    bookRows.set(title, await db.campusBook.create({ data: { title, author, isbn } }));
   }
   await db.campusLoan.createMany({ data: [
     { userId: users.get("student").id, bookId: bookRows.get("Базы данных: практикум").id, dueAt: at(2, "18:00") },
@@ -328,15 +331,15 @@ try {
 
   const postRows = [];
   const posts = [
-    ["student", "Команды", "Собираем команду на хакатон", "Ищем участника для тестового проекта по навигации в кампусе.", 14],
-    ["student2", "Учёба", "Обмен конспектами по матанализу", "Готовлюсь к контрольной, могу поделиться конспектами.", 10],
-    ["student3", "Барахолка", "Продаю учебник по базам данных", "Состояние хорошее, цена договорная.", 20],
-    ["student7", "События", "Встреча клуба веб-разработки", "В пятницу в коворкинге разберём React Server Components.", 7],
-    ["student9", "Потеряшки", "Найдена зачётка", "Нашёл в аудитории 105, обращайтесь.", 30],
+    ["student", "Команды", "Собираем команду на хакатон", "Ищем участника для тестового проекта по навигации в кампусе.", 14, "+7 900 000-10-10", "student@student.example.ru"],
+    ["student2", "Учёба", "Обмен конспектами по матанализу", "Готовлюсь к контрольной, могу поделиться конспектами.", 10, "+7 900 000-11-11", null],
+    ["student3", "Барахолка", "Продаю учебник по базам данных", "Состояние хорошее, цена договорная.", 20, null, "student3@student.example.ru"],
+    ["student7", "События", "Встреча клуба веб-разработки", "В пятницу в коворкинге разберём React Server Components.", 7, null, null],
+    ["student9", "Потеряшки", "Найдена зачётка", "Нашёл в аудитории 105, обращайтесь.", 30, "+7 900 000-18-18", null],
   ];
-  for (const [login, category, title, body, days] of posts) {
+  for (const [login, category, title, body, days, contactPhone, contactEmail] of posts) {
     postRows.push(await db.campusPost.create({ data: {
-      userId: users.get(login).id, category, title, body, expiresAt: at(days, "21:00"),
+      userId: users.get(login).id, category, title, body, contactPhone, contactEmail, expiresAt: at(days, "21:00"),
     } }));
   }
   await db.campusReply.createMany({ data: [

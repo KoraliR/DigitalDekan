@@ -5,6 +5,7 @@ import { GraduationCap, LogOut, Mail, MessageCircle, Phone, ShieldCheck, UserRou
 import { logout } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { PasswordDialog } from "@/components/password-dialog";
+import { SurnameStress } from "@/components/surname-stress";
 import type { ProfileDTO } from "@/lib/profile";
 
 type LoadState =
@@ -75,18 +76,25 @@ export function ProfileView() {
 
   const profile = state.profile;
   const program = [profile.programCode, profile.programName].filter(Boolean).join(" · ");
+  const updateSurnameStress = (stress: number | null) => setState((current) => current.status === "ready"
+    ? { status: "ready", profile: { ...current.profile, surnameStress: stress } }
+    : current);
 
   return <div className="profile-stack">
     <div className="profile-grid">
-      <section className="panel" aria-labelledby="personal-title">
-        <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><UserRound size={20} /></span><div><h2 id="personal-title">Личные данные</h2><p className="muted">Из учебной базы</p></div></div></div>
-        <dl className="profile-list">
-          <Row label="ФИО">{value(profile.name)}</Row>
-          <Row label="Дата рождения">{profile.birthDate ? formatBirthDate(profile.birthDate) + (profile.age !== null ? " · " + ageLabel(profile.age) : "") : "—"}</Row>
-          <Row label="Номер зачётки">{value(profile.studentId)}</Row>
-          <Row label="Логин">{value(profile.login)}</Row>
-        </dl>
-      </section>
+      <div className="profile-column">
+        <section className="panel" aria-labelledby="personal-title">
+          <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><UserRound size={20} /></span><div><h2 id="personal-title">Личные данные</h2><p className="muted">Из учебной базы</p></div></div></div>
+          <dl className="profile-list">
+            <Row label="ФИО">{value(profile.name)}</Row>
+            <Row label="Дата рождения">{profile.birthDate ? formatBirthDate(profile.birthDate) + (profile.age !== null ? " · " + ageLabel(profile.age) : "") : "—"}</Row>
+            <Row label="Номер зачётки">{value(profile.studentId)}</Row>
+            <Row label="Логин">{value(profile.login)}</Row>
+          </dl>
+        </section>
+
+        <SurnameStress name={profile.name} initialStress={profile.surnameStress} options={profile.surnameStressOptions} onSaved={updateSurnameStress} />
+      </div>
 
       <section className="panel" aria-labelledby="study-title">
         <div className="section-head"><div className="heading-with-icon"><span className="soft-icon"><GraduationCap size={20} /></span><div><h2 id="study-title">Учёба</h2><p className="muted">Институт и группа</p></div></div></div>

@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
-  ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, CalendarPlus, CheckCheck, ChevronLeft, ChevronRight,
+  ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, CalendarPlus, CheckCheck, ChevronDown, ChevronLeft, ChevronRight,
   CircleHelp, Clock3, Coffee, FileText, GraduationCap, Info, LogOut, Map, MapPin, Megaphone, Menu,
   Route, Shield, UserRound, X, type LucideIcon,
 } from "lucide-react";
@@ -12,6 +12,8 @@ import type { Tab } from "@/lib/tabs";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme";
+import { ScanAttendance } from "@/components/scan-attendance";
+import { GradeBreakdown } from "./grade-breakdown";
 import { Campus } from "./campus";
 import { DeadlineCalendar, SchedulePicker } from "./calendar";
 import { ProfileView } from "./profile";
@@ -123,6 +125,7 @@ function News({ items }: { items: DashboardData["news"] }) {
 function Grades({ grades }: { grades: DashboardData["grades"] }) {
   const terms = [...new Set(grades.map((grade) => grade.term))].sort((left, right) => right - left);
   const [view, setView] = useState(() => (terms.length ? String(terms[0]) : "all"));
+  const [openedId, setOpenedId] = useState<string | null>(null);
   const all = view === "all";
   const rows = all ? grades : grades.filter((grade) => String(grade.term) === view);
   const currentTerm = terms[0] ?? 0;
@@ -133,7 +136,7 @@ function Grades({ grades }: { grades: DashboardData["grades"] }) {
   return <div className="content-stack">
     <section className="panel">
       <div className="section-head"><div><h2>Дисциплины</h2><p className="muted">{grades.length ? (all ? "Все семестры" : "Семестр " + view) + " · " + countLabel(rows.length, ["дисциплина", "дисциплины", "дисциплин"]) : "Баллы по дисциплинам"}</p></div>
-        <select className="select-control" aria-label="Семестр" value={view} onChange={(event) => setView(event.target.value)} disabled={!grades.length}>
+        <select className="select-control" aria-label="Семестр" value={view} onChange={(event) => { setView(event.target.value); setOpenedId(null); }} disabled={!grades.length}>
           {terms.map((value) => <option key={value} value={String(value)}>Семестр {value}</option>)}
           <option value="all">Вся учёба</option>
         </select></div>
@@ -141,11 +144,18 @@ function Grades({ grades }: { grades: DashboardData["grades"] }) {
       {rows.map((grade) => {
         const left = Math.max(0, grade.threshold - grade.score);
         const type = meta(grade);
+        const opened = openedId === grade.id;
+        const detailId = "grade-detail-" + grade.id;
         return <article className="grade" key={grade.id}>
-          <div><h3>{grade.title} {type && <span className={"pill " + type.className}>{type.label}</span>}</h3><strong>{grade.score} / {grade.threshold}</strong></div>
+          <h3 className="grade-heading"><button type="button" className="grade-toggle" aria-expanded={opened} aria-controls={detailId}
+            onClick={() => setOpenedId(opened ? null : grade.id)}>
+            <span className="grade-toggle-title">{grade.title} {type && <span className={"pill " + type.className}>{type.label}</span>}</span>
+            <span className="grade-toggle-score"><strong>{grade.score} / {grade.threshold}</strong><ChevronDown className="grade-chevron" size={17} aria-hidden="true" /></span>
+          </button></h3>
           <progress aria-label={grade.title} max={Math.max(1, grade.threshold)} value={Math.max(0, Math.min(grade.score, grade.threshold))} />
           <p className="muted">{left ? "До порога " + left + " балл." : "Порог достигнут"}{all && " · Семестр " + grade.term}</p>
           <p className="grade-final-label">Итог: <strong>{finalGradeLabel(grade)}</strong></p>
+          {opened && <GradeBreakdown grade={grade} id={detailId} />}
         </article>;
       })}
     </section>
@@ -276,14 +286,15 @@ export function Dashboard({ tab, day, data, role, name, monitor = false, streak,
           <h2>Серия посещений</h2><strong>Дней подряд: {streak.count}</strong>
           {streak.waiting && <p className="muted">Серия ждёт отметок за ближайший незакрытый день.</p>}
         </section>}
-        {tab === "today" && <Link className="panel route-link" href="/campus-tools?tab=booking&window=1"><div><h2>Свободные окна</h2><p className="muted">Консультации, спортзал и другие занятия между парами</p></div><ArrowRight size={18} /></Link>}
-        {tab === "services" && <Link className="panel route-link" href="/campus-tools"><div><h2>Кампус и сервисы</h2><p className="muted">Пересдачи, консультации, бронирование, библиотека и объявления</p></div><ArrowRight size={18} /></Link>}
+        {tab === "today" && <Link className="panel route-link" href="/campus-tools"><div><h2>Сервисы</h2><p className="muted">Пересдачи, консультации, библиотека и объявления</p></div><ArrowRight size={18} /></Link>}
+        {tab === "services" && <Link className="panel route-link" href="/campus-tools"><div><h2>Сервисы</h2><p className="muted">Пересдачи, консультации, бронирование, библиотека и объявления</p></div><ArrowRight size={18} /></Link>}
         {tab === "profile" && <div className="campus-nav">
-          <Link className="button button-secondary" href="/campus-tools?tab=profile">Пропуск и ударение</Link>
+          <Link className="button button-secondary" href="/campus-tools?tab=profile">Пропуск</Link>
           <Link className="button button-secondary" href="/campus-tools?tab=portfolio">Портфолио</Link>
         </div>}
       </div>}
       {tab === "today" && <div className="content-stack">
+        {!demo && <ScanAttendance />}
         <div className="dashboard-grid">
           <Schedule lessons={data.lessons} deadlines={data.deadlines} day={day} mapUrl={base + "map"} icsUrl={demo ? undefined : "/api/schedule"} />
           <div className="content-stack"><Deadlines items={data.deadlines} day={day} href={base + "calendar"} />
@@ -298,7 +309,6 @@ export function Dashboard({ tab, day, data, role, name, monitor = false, streak,
       {tab === "map" && <Campus key={initialRoom ?? "campus"} lessons={data.lessons} initialRoom={initialRoom} />}
       {tab === "calendar" && <div className="content-stack">
         <div className="dashboard-grid campus-grid"><DeadlineCalendar day={day} items={data.deadlines} selected={selectedDay} onSelect={setSelectedDay} /><Deadlines items={selectedDay ? data.deadlines.filter((item) => campusDay(new Date(item.dueAt)) === selectedDay) : data.deadlines} day={day} /></div>
-        <News items={data.news} />
       </div>}
     </main></div>
     {nav("bottom-nav")}

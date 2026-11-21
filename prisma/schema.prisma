@@ -111,16 +111,19 @@ model Attendance {
 }
 
 model Grade {
-  id         String          @id @default(cuid())
-  userId     String
-  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  title      String
-  score      Int
-  threshold  Int
-  term       Int
-  assessment AssessmentType?
-  finalGrade Int?
-  passed     Boolean?
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  score           Int
+  threshold       Int
+  term            Int
+  assessment      AssessmentType?
+  finalGrade      Int?
+  passed          Boolean?
+  practiceScore   Int?
+  attendanceScore Int?
+  controlScore    Int?
 
   @@unique([userId, title, term])
 }
@@ -316,6 +319,7 @@ model CampusBook {
   id     String       @id @default(cuid())
   title  String       @unique
   author String
+  isbn   String?
   loans  CampusLoan[]
   holds  CampusHold[]
 }
@@ -343,17 +347,19 @@ model CampusHold {
 }
 
 model CampusPost {
-  id        String        @id @default(cuid())
-  userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category  String
-  title     String
-  body      String
-  createdAt DateTime      @default(now())
-  expiresAt DateTime
-  closed    Boolean       @default(false)
-  flagged   Boolean       @default(false)
-  replies   CampusReply[]
+  id           String        @id @default(cuid())
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     String
+  title        String
+  body         String
+  contactPhone String?
+  contactEmail String?
+  createdAt    DateTime      @default(now())
+  expiresAt    DateTime
+  closed       Boolean       @default(false)
+  flagged      Boolean       @default(false)
+  replies      CampusReply[]
 }
 
 model CampusReply {

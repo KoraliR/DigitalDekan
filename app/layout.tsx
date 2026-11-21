@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 
 import "@fontsource-variable/manrope";
 import "./globals.css";
+import "./student-ui.css";
+import "./qr-ui.css";
+import "./staff-ui.css";
 
 export const metadata: Metadata = {
   title: "Цифровой деканат",

@@ -43,10 +43,10 @@ export function demoData(day: string): DashboardData {
         startsAt: at(-2, "10:20"), endsAt: at(-2, "11:50") },
     ],
     grades: [
-      { id: "g1", title: "Технологии программирования", score: 45, threshold: 60, term: 3, assessment: "EXAM", finalGrade: null, passed: null },
-      { id: "g2", title: "Управление данными", score: 52, threshold: 60, term: 3, assessment: "COURSEWORK", finalGrade: null, passed: null },
-      { id: "g3", title: "Базы данных", score: 48, threshold: 60, term: 3, assessment: "TEST", finalGrade: null, passed: null },
-      { id: "g4", title: "Введение в разработку", score: 68, threshold: 60, term: 2, assessment: "TEST", finalGrade: null, passed: true },
+      { id: "g1", title: "Технологии программирования", score: 45, threshold: 60, term: 3, assessment: "EXAM", finalGrade: null, passed: null, practiceScore: 18, attendanceScore: 9, controlScore: 18 },
+      { id: "g2", title: "Управление данными", score: 52, threshold: 60, term: 3, assessment: "COURSEWORK", finalGrade: null, passed: null, practiceScore: 21, attendanceScore: 10, controlScore: 21 },
+      { id: "g3", title: "Базы данных", score: 48, threshold: 60, term: 3, assessment: "TEST", finalGrade: null, passed: null, practiceScore: 19, attendanceScore: 10, controlScore: 19 },
+      { id: "g4", title: "Введение в разработку", score: 68, threshold: 60, term: 2, assessment: "TEST", finalGrade: null, passed: true, practiceScore: 27, attendanceScore: 14, controlScore: 27 },
     ],
     deadlines: [
       { id: "c1", title: "Отчёт по лабораторной № 3", course: "Технологии программирования", dueAt: at(1, "23:59"), lessonId: "d1", completedAt: null },

@@ -3,16 +3,18 @@ import { StaffRequestForm } from "@/components/staff-request-form";
 import { ArrowUpRight, BellRing, CalendarPlus, ChevronRight, Filter, Inbox, Megaphone, Plus, Send } from "lucide-react";
 import QRCode from "qrcode";
 import { StaffCalendar } from "@/components/staff-calendar";
-import { AttendanceCheckbox, GroupRoster } from "@/components/group-roster";
+import { GroupRoster } from "@/components/group-roster";
 import { groupAttendance } from "@/app/attendance/actions";
+import { DeadlineRoster } from "@/components/deadline-roster";
+import { AudiencePicker, GroupSearch } from "@/components/group-search";
 import { GradeFields, GradeRegister } from "@/components/grade-register";
 import Link from "next/link";
 import { StaffShell } from "@/components/staff-shell";
-import { RequestStatus, RequestType } from "@prisma/client";
+import { Prisma, RequestStatus, RequestType } from "@prisma/client";
 import { account, staffGroups, staffStudents } from "@/lib/access";
 import { db } from "@/lib/db";
-import { campusDay, dateLabel, plusDays, finalGradeLabel, lessonTypes, services, statuses, timeLabel } from "@/lib/model";
-import { createDeadline, publish, saveAttendance, saveGrade, saveLesson } from "./actions";
+import { campusDay, dateLabel, plusDays, lessonTypes, services, statuses, timeLabel } from "@/lib/model";
+import { createDeadline, publish, saveGrade, saveLesson } from "./actions";
 import { Button } from "@/components/ui/button";
 
 const sections = {
@@ -37,16 +39,28 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
   const groupId = groups.find(({ id }) => id === params.group)?.id;
   const status = Object.values(RequestStatus).find((value) => value === params.status);
   const type = Object.values(RequestType).find((value) => value === params.type);
+  const requestQuery = typeof params.q === "string" ? params.q.trim().slice(0, 40) : "";
+  const showOverdue = params.overdue === "1" || params.category === "overdue";
+  const pendingOnly = params.pending === "1";
   const active = { user: scope, status: { in: [RequestStatus.NEW, RequestStatus.PROCESSING] } };
   const now = new Date();
   const today = campusDay(now);
+  const deadlineSince = new Date(+now - 60 * 86400000);
   const attendanceDate = typeof params.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(params.date) && Number.isFinite(Date.parse(params.date)) ? params.date : today;
-  const [newCount, overdue, deadlines, requests, lessons, students, audit, attendanceLessons, groupDeadlines, inboxRequests, inboxLessons] = await Promise.all([
+  const requestWhere: Prisma.ServiceRequestWhereInput = {
+    user: staffStudents(user.id, groupId),
+    ...(type ? { type } : {}),
+    ...(showOverdue
+      ? { status: status ?? { in: [RequestStatus.NEW, RequestStatus.PROCESSING] }, readyBy: { lt: now } }
+      : status ? { status } : {}),
+    ...(requestQuery ? { OR: [{ number: { contains: requestQuery, mode: "insensitive" } }, { id: { startsWith: requestQuery } }] } : {}),
+  };
+  const [newCount, overdueCount, deadlines, requests, lessons, students, audit, groupDeadlines, inboxRequests, inboxLessons] = await Promise.all([
     section === "overview" ? db.serviceRequest.count({ where: { user: scope, status: "NEW" } }) : 0,
     section === "overview" ? db.serviceRequest.count({ where: { ...active, readyBy: { lt: now } } }) : 0,
     section === "overview" ? db.deadline.findMany({ where: { user: scope, dueAt: { gte: now } }, distinct: ["title", "course", "dueAt"], orderBy: { dueAt: "asc" }, take: 5 }) : [],
     section === "requests" ? db.serviceRequest.findMany({
-      where: { user: staffStudents(user.id, groupId), status, type, ...(params.overdue === "1" ? { status: active.status, readyBy: { lt: now } } : {}) },
+      where: requestWhere,
       include: { user: { select: { name: true, studentProfile: { select: { surnameStress: true, group: { select: { name: true } } } } } } },
       orderBy: { createdAt: "desc" },
     }) : [],
@@ -58,18 +72,10 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
     section === "audit" ? db.auditEntry.findMany({
       where: { groupId: { in: groups.map(({ id }) => id) } }, include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 100,
     }) : [],
-    section === "attendance" ? db.lesson.findMany({
-      where: {
-        user: staffStudents(user.id, groupId),
-        startsAt: { gte: new Date(attendanceDate + "T00:00:00+03:00"), lt: new Date(attendanceDate + "T23:59:59+03:00") },
-      },
-      include: { user: { select: { name: true, studentProfile: { select: { surnameStress: true } } } }, attendances: true },
-      orderBy: { startsAt: "asc" },
-    }) : [],
     section === "deadlines" ? db.deadline.findMany({
-      where: { user: staffStudents(user.id, groupId), dueAt: { gte: now } },
+      where: { user: staffStudents(user.id, groupId), dueAt: { gte: deadlineSince } },
       include: { user: { select: { name: true, studentProfile: { select: { surnameStress: true, group: { select: { name: true } } } } } } },
-      orderBy: { dueAt: "asc" }, take: 100,
+      orderBy: [{ dueAt: "asc" }, { title: "asc" }], take: 300,
     }) : [],
     section === "overview" ? db.serviceRequest.findMany({
       where: { ...active, OR: [{ status: "NEW" }, { readyBy: { lt: now } }] },
@@ -86,6 +92,21 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
     }) : [],
   ]);
   const groupOptions = groups.map(({ id, name }) => <option key={id} value={id}>{name}</option>);
+  const scheduleDays = [...new Set(lessons.filter((lesson) => !groupId || lesson.groupId === groupId).map((lesson) => campusDay(lesson.startsAt)))];
+  type DeadlineBlock = { key: string; title: string; course: string; dueAt: Date; rows: { id: string; student: string; group: string; completed: boolean }[] };
+  const deadlineBlocks = [...groupDeadlines.reduce((blocks, deadline) => {
+    const key = JSON.stringify([deadline.title, deadline.course, deadline.dueAt.toISOString()]);
+    const row = {
+      id: deadline.id,
+      student: displayStudent(deadline.user.name, deadline.user.studentProfile?.surnameStress),
+      group: deadline.user.studentProfile?.group?.name ?? "",
+      completed: Boolean(deadline.completedAt),
+    };
+    const block = blocks.get(key);
+    if (block) block.rows.push(row);
+    else blocks.set(key, { key, title: deadline.title, course: deadline.course, dueAt: deadline.dueAt, rows: [row] });
+    return blocks;
+  }, new Map<string, DeadlineBlock>()).values()].filter((block) => !pendingOnly || block.rows.some((row) => !row.completed));
 
   const subjects = [...new Map(students.flatMap((student) => student.grades.map(({ title, term }) => [
     JSON.stringify([title, term]), { title, term },
@@ -117,7 +138,7 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
     {section === "overview" && <div className="content-stack">
       <div className="staff-metrics">
         <Link className="panel" href="/staff?section=requests&status=NEW"><strong>{newCount}</strong><span>Новые заявки</span></Link>
-        <Link className="panel" href="/staff?section=requests&overdue=1"><strong>{overdue}</strong><span>Просроченные заявки</span></Link>
+        <Link className="panel" href="/staff?section=requests&overdue=1"><strong>{overdueCount}</strong><span>Просроченные заявки</span></Link>
       </div>
       <section className="panel staff-inbox">
         <h2><Inbox size={20} aria-hidden="true" /> Входящие</h2>
@@ -137,16 +158,24 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
     </div>}
 
     {section === "requests" && <section className="panel">
-      <h2>{params.overdue === "1" ? "Просроченные заявки" : "Заявки студентов"}</h2>
-      {params.overdue === "1" && <Link className="text-link" href="/staff?section=requests">Все заявки</Link>}
-      <form className="staff-fields">
+      <div className="staff-panel-head">
+        <h2>{showOverdue ? "Просроченные заявки" : "Заявки студентов"}</h2>
+        {showOverdue && <Link className="text-link" href="/staff?section=requests">Все заявки</Link>}
+      </div>
+      <form className="staff-fields staff-filters" aria-label="Фильтр заявок">
         <input type="hidden" name="section" value="requests" />
+        <label>Номер заявки<input type="search" name="q" defaultValue={requestQuery} placeholder="З-2026-1000" maxLength={40} /></label>
         <label>Статус<select name="status" defaultValue={status ?? ""}><option value="">Все статусы</option>{Object.entries(statuses).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
         <label>Тип<select name="type" defaultValue={type ?? ""}><option value="">Все типы</option>{Object.entries(services).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
-        <label>Группа<select name="group" defaultValue={groupId ?? ""}><option value="">Все группы</option>{groupOptions}</select></label>
-        <Button variant="secondary"><Filter size={16} /> Применить фильтры</Button>
+        <GroupSearch name="group" groups={groups} defaultValue={groupId} />
+        <label>Категория<select name="category" defaultValue={showOverdue ? "overdue" : ""}><option value="">Все заявки</option><option value="overdue">Просроченные заявки</option></select></label>
+        <div className="staff-filter-actions">
+          <Button variant="secondary"><Filter size={16} /> Найти</Button>
+          <Button asChild variant="secondary"><Link href="/staff?section=requests">Сбросить</Link></Button>
+        </div>
       </form>
       {!requests.length && <p className="empty">Заявок по этим условиям нет</p>}
+      {requests.length > 0 && <p className="staff-result-count" role="status">Найдено: <strong>{requests.length}</strong></p>}
       {requests.map((request) => <details className="staff-row" key={request.id} open={params.request === request.id || undefined}><summary>
         <strong>{request.number ?? "№ " + request.id.slice(0, 8)}</strong> · {services[request.type]} · {statuses[request.status]}<br />
         <span className="muted">{displayStudent(request.user.name, request.user.studentProfile?.surnameStress)} · {request.user.studentProfile?.group?.name} · {dateLabel(request.createdAt)}</span>
@@ -156,18 +185,31 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
 
     {section === "news" && <section className="panel"><h2>Новое объявление</h2><form className="staff-fields" action={publish}>
       <label>Формат<select name="kind"><option value="news">Новость</option><option value="reminder">Напоминание</option></select></label>
-      <label>Аудитория<select name="audience" defaultValue={groupId ? "group:" + groupId : "all"}><option value="all">Все закреплённые группы</option>
-        {[...new Set(groups.map(({ faculty }) => faculty))].map((faculty) => <option key={faculty} value={"faculty:" + faculty}>Факультет · {faculty}</option>)}
-        {[...new Set(groups.map(({ course }) => course))].map((course) => <option key={course} value={"course:" + course}>Курс · {course}</option>)}
-        {groups.map(({ id, name }) => <option key={id} value={"group:" + id}>Группа · {name}</option>)}
-      </select></label>
+      <AudiencePicker groups={groups.map(({ id, name }) => ({ id, name }))}
+        faculties={[...new Set(groups.map(({ faculty }) => faculty))]}
+        courses={[...new Set(groups.map(({ course }) => course))]}
+        defaultValue={groupId ? "group:" + groupId : "all"} />
       <label className="staff-wide">Заголовок<input name="title" maxLength={120} required /></label>
       <label className="staff-wide">Текст<textarea name="body" maxLength={2000} required /></label>
       <Button disabled={!groups.length}><Send size={16} /> Опубликовать</Button>
     </form></section>}
 
-    {section === "schedule" && <div className="content-stack"><StaffCalendar today={today} date={attendanceDate} days={[...new Set(lessons.map((lesson) => campusDay(lesson.startsAt)))]} /><section className="panel"><h2>Добавить занятие · {dateLabel(new Date(attendanceDate + "T12:00:00+03:00"), true)}</h2><form className="staff-fields" action={saveLesson}>
-      <label>Группа<select name="group" required>{groupOptions}</select></label>
+    {section === "schedule" && <div className="content-stack">
+      <section className="panel">
+        <h2>Расписание групп</h2>
+        <form className="staff-fields staff-filters" aria-label="Фильтр расписания">
+          <input type="hidden" name="section" value="schedule" />
+          <GroupSearch name="group" groups={groups} defaultValue={groupId} />
+          <label>Дата<input type="date" name="date" defaultValue={attendanceDate} /></label>
+          <div className="staff-filter-actions">
+            <Button variant="secondary">Показать занятия</Button>
+            <Button asChild variant="secondary"><Link href="/staff?section=schedule">Сбросить</Link></Button>
+          </div>
+        </form>
+      </section>
+      <StaffCalendar today={today} date={attendanceDate} days={scheduleDays} group={groupId} />
+      <section className="panel"><h2>Добавить занятие · {dateLabel(new Date(attendanceDate + "T12:00:00+03:00"), true)}</h2><form className="staff-fields" action={saveLesson}>
+      <label>Группа занятия<select name="group" required defaultValue={groupId ?? undefined}>{groupOptions}</select></label>
       <label>Тип<select name="type">{lessonTypeOptions.map(([value, meta]) => <option key={value} value={value}>{meta.label}</option>)}</select></label>
       <label>Дисциплина<input name="title" maxLength={120} required /></label>
       <label>Преподаватель<input name="teacher" maxLength={100} required /></label>
@@ -194,12 +236,17 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
     </section></div>}
 
     {section === "attendance" && <div className="content-stack"><section className="panel"><h2>Посещаемость</h2>
-      <form className="staff-fields">
+      <form className="staff-fields staff-filters" aria-label="Фильтр посещаемости">
         <input type="hidden" name="section" value="attendance" />
-        <label>Группа<select name="group" defaultValue={groupId ?? ""}><option value="">Все группы</option>{groupOptions}</select></label>
+        <GroupSearch name="group" groups={groups} defaultValue={groupId} />
         <label>Дата<input type="date" name="date" defaultValue={attendanceDate} /></label>
-        <Button variant="secondary">Показать занятия</Button>
+        <div className="staff-filter-actions">
+          <Button variant="secondary">Показать занятия</Button>
+          <Button asChild variant="secondary"><Link href="/staff?section=attendance">Сбросить</Link></Button>
+        </div>
       </form>
+      {groupId && <p className="staff-back-links"><Link className="text-link" href="/staff?section=attendance">← Ко всем группам</Link><span className="muted">Назад в посещение без фильтра группы</span></p>}
+      {selectedLesson && <p className="staff-back-links"><Link className="text-link" href={"/staff?" + new URLSearchParams({ section: "attendance", group: selectedLesson.groupId, date: attendanceDate })}>← К списку пар группы</Link></p>}
       <div className="service-list">{dayLessons.map((lesson) => <Link className="service-item" aria-current={lesson.id === selectedLesson?.id ? "page" : undefined} key={lesson.id}
         href={"/staff?" + new URLSearchParams({ section: "attendance", date: attendanceDate, group: lesson.groupId, lesson: lesson.id })}>
         {timeLabel(lesson.startsAt)} · {lesson.title} · {lesson.group.name}
@@ -209,10 +256,11 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
         <GroupRoster showSummary={params.saved === "1"} key={selectedLesson.id} id={selectedLesson.id} students={roster.map((student) => ({ ...student, name: displayStudent(student.name, student.studentProfile?.surnameStress), status: student.groupMarks[0]?.status }))} />
         <form className="staff-fields" action={groupAttendance}>
           <input type="hidden" name="lesson" value={selectedLesson.id} /><input type="hidden" name="command" value="monitor" />
-          <label>Староста<select name="student" defaultValue={roster.find((student) => student.studentProfile?.isMonitor)?.id ?? ""}>
-            <option value="">Без доступа старосты</option>
+          <label>Студент, отмечающий посещаемость<select name="student" defaultValue={roster.find((student) => student.studentProfile?.isMonitor)?.id ?? ""}>
+            <option value="">Без доступа к отметкам</option>
             {roster.map((student) => <option value={student.id} key={student.id}>{displayStudent(student.name, student.studentProfile?.surnameStress)}</option>)}
-          </select></label><Button variant="secondary">Сохранить доступ старосты</Button>
+          </select><small className="muted">Этот студент сможет отмечать посещаемость группы за всех студентов.</small></label>
+          <Button variant="secondary">Сохранить отмечающего</Button>
         </form>
         <form action={groupAttendance} className="top-actions">
           <input type="hidden" name="lesson" value={selectedLesson.id} />
@@ -222,34 +270,46 @@ export default async function Staff({ searchParams }: { searchParams: Promise<Re
         {qr && <div><img src={qrImage} width={240} height={240} alt="QR-код для отметки присутствия" />
           <p>До {timeLabel(qr.expiresAt)} МСК · <Link href={qrLink}>Открыть ссылку отметки</Link></p></div>}
       </section>}
-      {!dayLessons.length && !attendanceLessons.length && <p className="empty">На эту дату занятий нет</p>}
-      {attendanceLessons.map((lesson) => {
-        const mark = lesson.attendances.find((item) => item.userId === lesson.userId)?.status;
-        return <form className="staff-fields" key={lesson.id} action={saveAttendance}>
-          <input type="hidden" name="lesson" value={lesson.id} />
-          <p className="staff-wide">{displayStudent(lesson.user.name, lesson.user.studentProfile?.surnameStress)} · {lesson.title} · {timeLabel(lesson.startsAt)}–{timeLabel(lesson.endsAt)}</p>
-          <AttendanceCheckbox key={mark ?? ""} name="status" student={displayStudent(lesson.user.name, lesson.user.studentProfile?.surnameStress)} status={mark} />
-          <Button variant="secondary">Сохранить</Button>
-        </form>;
-      })}
+      {!dayLessons.length && <p className="empty">На эту дату занятий нет</p>}
     </section></div>}
 
-    {section === "deadlines" && <div className="content-stack"><section className="panel"><h2>Новый дедлайн</h2><form className="staff-fields" action={createDeadline}>
-      <label>Группа<select name="group" required>{groupOptions}</select></label>
-      <label>Дисциплина<input name="course" maxLength={120} required /></label>
-      <label>Работа<input name="title" maxLength={120} required /></label>
-      <label>Срок<input type="date" name="dueAt" required /></label>
-      <Button disabled={!groups.length}>Добавить и уведомить</Button>
-    </form></section><section className="panel"><h2>Предстоящие дедлайны</h2>
-      {!groupDeadlines.length && <p className="empty">Дедлайнов пока нет</p>}
-      {groupDeadlines.map((deadline) => <p className="staff-row deadline-target" id={"deadline-" + deadline.id} key={deadline.id}>
-        {dateLabel(deadline.dueAt)} · {deadline.title} · {deadline.course} · {displayStudent(deadline.user.name, deadline.user.studentProfile?.surnameStress)}
-      </p>)}
-    </section></div>}
+    {section === "deadlines" && <div className="content-stack">
+      <section className="panel"><h2>Новый дедлайн</h2><form className="staff-fields" action={createDeadline}>
+        <label>Группа студентов<select name="group" required>{groupOptions}</select></label>
+        <label>Дисциплина<input name="course" maxLength={120} required /></label>
+        <label>Работа<input name="title" maxLength={120} required /></label>
+        <label>Срок<input type="date" name="dueAt" required /></label>
+        <Button disabled={!groups.length}>Добавить и уведомить</Button>
+      </form></section>
+      <section className="panel"><h2>Дедлайны групп</h2>
+        <p className="muted">Работы за последние 60 дней и предстоящие. Отметьте сдавших вручную — отметка сохраняется по каждому студенту отдельно.</p>
+        <form className="staff-fields staff-filters" aria-label="Фильтр дедлайнов">
+          <input type="hidden" name="section" value="deadlines" />
+          <GroupSearch name="group" groups={groups} defaultValue={groupId} />
+          <label className="staff-check"><input type="checkbox" name="pending" value="1" defaultChecked={pendingOnly} /> Только не сданные</label>
+          <div className="staff-filter-actions">
+            <Button variant="secondary"><Filter size={16} /> Применить фильтр</Button>
+            <Button asChild variant="secondary"><Link href="/staff?section=deadlines">Сбросить</Link></Button>
+          </div>
+        </form>
+        {!deadlineBlocks.length && <p className="empty">Дедлайнов по этим условиям нет</p>}
+        {deadlineBlocks.map((block) => <DeadlineRoster key={block.key} title={block.title} course={block.course}
+          dueLabel={dateLabel(block.dueAt)} late={block.dueAt < now && block.rows.some((row) => !row.completed)}
+          group={groupId ?? ""} pendingOnly={pendingOnly} rows={block.rows} />)}
+      </section>
+    </div>}
 
     {section === "grades" && <section className="panel">
       <h2>Журнал оценок</h2>
-      <form className="staff-fields"><input type="hidden" name="section" value="grades" />{subject && <><input type="hidden" name="subject" value={subject.title} /><input type="hidden" name="term" value={subject.term} /></>}<label>Группа<select name="group" defaultValue={groupId ?? ""}><option value="">Все группы</option>{groupOptions}</select></label><Button variant="secondary">Показать</Button></form>
+      <form className="staff-fields staff-filters" aria-label="Фильтр оценок">
+        <input type="hidden" name="section" value="grades" />
+        {subject && <><input type="hidden" name="subject" value={subject.title} /><input type="hidden" name="term" value={subject.term} /></>}
+        <GroupSearch name="group" groups={groups} defaultValue={groupId} />
+        <div className="staff-filter-actions">
+          <Button variant="secondary">Показать</Button>
+          <Button asChild variant="secondary"><Link href="/staff?section=grades">Сбросить</Link></Button>
+        </div>
+      </form>
       <section aria-label="Средний балл групп" className="content-stack">
         <h3>{subject ? "Средний балл по предмету" : "Средний балл по группам"}</h3>
         {groups.filter((group) => !groupId || group.id === groupId).map((group) => {

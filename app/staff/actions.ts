@@ -34,6 +34,11 @@ async function mutate(section: string, form: FormData, operation: Operation) {
     if (form.get("ungraded") === "1") query.set("ungraded", "1");
   }
   if (section === "requests") query.set("request", field(form, "id", 100));
+  if (section === "deadlines") {
+    const group = field(form, "group", 100);
+    if (group) query.set("group", group);
+    if (form.get("pending") === "1") query.set("pending", "1");
+  }
   const returnTo = "/staff?" + query;
   try {
     await db.$transaction((tx) => operation(tx, staff.id, form));
@@ -243,5 +248,31 @@ export async function createDeadline(form: FormData) {
     await tx.deadline.createMany({ data: students.map(({ id }) => ({ userId: id, title, course, dueAt })) });
     await tx.notification.createMany({ data: students.map(({ id }) => ({ userId: id, title: "Новый дедлайн · " + title, body: course + " · до " + dateLabel(dueAt) })) });
     await tx.auditEntry.create({ data: { actorId: staffId, groupId: group.id, summary: "Дедлайн · " + group.name + " · " + title + " · " + dateLabel(dueAt) } });
+  });
+}
+
+/**
+ * Отметки «сдано / не сдано» по каждому студенту отдельно: форма присылает ids
+ * строк дедлайна (name="row") и отметки (name="done-<id>", value "1"/"0").
+ */
+export async function saveDeadlineStatus(form: FormData) {
+  await mutate("deadlines", form, async (tx, staffId, input) => {
+    const ids = input.getAll("row").filter((value): value is string => typeof value === "string" && value.length > 0).slice(0, 200);
+    requireInput(ids.length > 0, "Не выбрано ни одного студента.");
+    const rows = await tx.deadline.findMany({
+      where: { id: { in: ids }, user: staffStudents(staffId) },
+      select: { id: true, title: true, completedAt: true, user: { select: { name: true, studentProfile: { select: { groupId: true } } } } },
+    });
+    requireInput(rows.length === ids.length, "Некоторые дедлайны не относятся к вашим группам.");
+    const now = new Date();
+    for (const row of rows) {
+      const completed = input.get("done-" + row.id) === "1";
+      if (completed === Boolean(row.completedAt)) continue;
+      await tx.deadline.update({ where: { id: row.id }, data: { completedAt: completed ? now : null } });
+      await tx.auditEntry.create({ data: {
+        actorId: staffId, groupId: row.user.studentProfile?.groupId,
+        summary: "Дедлайн · " + row.title + " · " + row.user.name + " · " + (completed ? "сдано" : "не сдано"),
+      } });
+    }
   });
 }

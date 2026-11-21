@@ -11,6 +11,7 @@ import { PasswordField } from "@/components/ui/password-field";
 export function Login({ enabled, staff = false, next }: { enabled: boolean; staff?: boolean; next?: string }) {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
+  const [remember, setRemember] = useState(false);
   const [pending, run] = useTransition();
 
   function submit(form: FormData) {
@@ -28,8 +29,15 @@ export function Login({ enabled, staff = false, next }: { enabled: boolean; staf
           if (result.code) setCode(result.code);
           else setError(result.error ?? "");
         }
-      } catch {
-        setError("Не удалось завершить вход. Повторите попытку.");
+      } catch (error) {
+        // Частая причина «вход не работает» — вкладка открыта до перезапуска dev-сервера:
+        // её клиентский бандл ссылается на устаревшие server actions.
+        const message = error instanceof Error ? error.message : "";
+        if (/server action|failed to find|unexpected response|fetch failed/i.test(message)) {
+          setError("Приложение обновлялось. Перезагрузите страницу (Ctrl+Shift+R) и попробуйте снова.");
+        } else {
+          setError("Не удалось завершить вход. Проверьте соединение и повторите попытку.");
+        }
       }
     });
   }
@@ -52,10 +60,18 @@ export function Login({ enabled, staff = false, next }: { enabled: boolean; staf
           <Field label="Пароль" htmlFor="login-password">
             <PasswordField id="login-password" name="password" autoComplete="current-password" required />
           </Field>
+          <label className="login-remember">
+            <input type="checkbox" name="remember" value="1" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+            <span><strong>Запомнить меня</strong><small>Не закрывать сессию на этом устройстве 30 дней</small></span>
+          </label>
         </>}
         {error && <p className="form-error" role="alert">{error}</p>}
         <Button disabled={pending}>{pending ? "Проверяем…" : code ? "Подтвердить" : "Войти"}<ArrowRight size={17} /></Button>
       </form>}
+      {enabled && !code && <p className="login-demo-hint muted" lang="ru">
+        Демо-доступ: {staff ? <><code>office</code> / <code>dekanat-2026</code></> : <><code>student</code> / <code>dekanat-2026</code></>}
+        {staff ? " · студенты входят через «Вход студента»" : " · сотрудники входят через «Вход сотрудника»"}
+      </p>}
       {!enabled && <p className="notice">Вход с учётной записью отключён в настройках сервера.</p>}
       <Link className="text-link" href={staff ? "/login" : "/staff-login"}>{staff ? "Вход студента" : "Вход сотрудника"}</Link>
       <Button asChild variant="secondary" className="demo-link"><Link href="/demo/today">Открыть демоверсию</Link></Button>
