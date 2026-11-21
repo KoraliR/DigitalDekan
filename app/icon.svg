@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Цифровой деканат">
+  <rect width="64" height="64" rx="16" fill="#6b4a2f"/>
+  <path d="M32 16 8 28l24 12 24-12-24-12Z" fill="#f6e7d7"/>
+  <path d="M18 34v10c0 4 6 8 14 8s14-4 14-8V34l-14 7-14-7Z" fill="#f6e7d7" opacity=".8"/>
+</svg>
