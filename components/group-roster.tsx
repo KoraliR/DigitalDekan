@@ -24,7 +24,7 @@ export function AttendanceCheckbox({ name, student, status, changesOnly = false 
 
 export function GroupRoster({ id, students, showSummary = false }: {
   id: string;
-  students: { id: string; name: string; status?: AttendanceStatus }[];
+  students: { id: string; name: string; status?: AttendanceStatus | null }[];
   showSummary?: boolean;
 }) {
   const [edits, setEdits] = useState<Record<string, AttendanceStatus>>({});

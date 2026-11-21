@@ -78,6 +78,27 @@ export interface DeadlineView {
   lessonId: string | null;
   completedAt: string | null;
 }
+export interface JournalStudent {
+  id: string;
+  name: string;
+  status: AttendanceStatus | null;
+}
+export interface JournalLesson {
+  id: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  teacher: string;
+  room: string;
+  type: LessonType;
+  groupName: string;
+  students: JournalStudent[];
+}
+export interface JournalData {
+  lessons: JournalLesson[];
+  saved: boolean;
+  savedLessonId: string | null;
+}
 
 export function campusDay(date: Date) {
   return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Moscow", dateStyle: "short" }).format(date);

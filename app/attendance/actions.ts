@@ -5,6 +5,7 @@ import { forbidden, redirect } from "next/navigation";
 import { account, staffGroups } from "@/lib/access";
 import { markAttendanceByToken } from "@/lib/attendance-qr";
 import { db } from "@/lib/db";
+import { campusDay } from "@/lib/model";
 
 export async function groupAttendance(form: FormData) {
   const actor = await account();
@@ -14,6 +15,8 @@ export async function groupAttendance(form: FormData) {
     id: lessonId, group: staff ? staffGroups(actor.id) : { students: { some: { userId: actor.id, isMonitor: true } } },
   }, include: { group: { include: { students: { where: { user: { role: "STUDENT" } }, include: { user: { select: { name: true } } } } } } } });
   if (!lesson) forbidden();
+  // Староста может отмечать только пары сегодняшнего дня.
+  if (!staff && campusDay(lesson.startsAt) !== campusDay(new Date())) forbidden();
   const command = form.get("command");
   const url = new URLSearchParams({ section: "attendance", lesson: lessonId, group: lesson.groupId, date: new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Moscow", dateStyle: "short" }).format(lesson.startsAt) });
   /** Запись в аудит: сотрудник и староста должны видеть итоги действий в журнале. */
@@ -49,7 +52,7 @@ export async function groupAttendance(form: FormData) {
     if (marks.length) await audit((staff ? "Посещаемость" : "Отметка старосты") + " · " + lesson.title + " · " + lesson.group.name + " · студентов: " + marks.length);
   }
   url.set("saved", "1");
-  redirect(staff ? "/staff?" + url : "/attendance?lesson=" + encodeURIComponent(lessonId) + "&saved=1");
+  redirect(staff ? "/staff?" + url : "/cabinet/journal?saved=1&lesson=" + encodeURIComponent(lessonId));
 }
 
 export async function scanAttendance(form: FormData) {

@@ -78,3 +78,9 @@
   .journal-head .top-actions { display: grid; grid-template-columns: 1fr; }
   .journal-head .button { width: 100%; }
 }
+
+/* --- Журнал старосты (вкладка кабинета) --- */
+.journal-lesson { gap: 10px; }
+.journal-lesson h3 { font-size: 15px; }
+.journal-lesson > div > p { margin-top: 3px; }
+.journal-lesson .grade-register { margin-top: 4px; }

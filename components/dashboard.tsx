@@ -7,7 +7,7 @@ import {
   Route, Shield, UserCheck, UserRound, X, type LucideIcon,
 } from "lucide-react";
 import { apply, logout, markNotificationsRead } from "@/app/actions";
-import { campusDay, dateLabel, daysBetween, finalGradeLabel, assessments, plusDays, requestStatusClass, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData } from "@/lib/model";
+import { campusDay, dateLabel, daysBetween, finalGradeLabel, assessments, plusDays, requestStatusClass, services, statuses, timeLabel, weekStart, weeksBetween, type DashboardData, type JournalData } from "@/lib/model";
 import { newsKindClass, newsKindLabel } from "@/lib/news";
 import type { Tab } from "@/lib/tabs";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { ProfileView } from "./profile";
 import { LessonTypeBadge } from "./lesson-meta";
 import { LessonDialog } from "./lesson-dialog";
 import { RequestDialog } from "./request-dialog";
+import { GroupRoster } from "./group-roster";
 import type { RequestType } from "@prisma/client";
 
 const navigation: { id: Tab; title: string; icon: LucideIcon }[] = [
@@ -29,6 +30,7 @@ const navigation: { id: Tab; title: string; icon: LucideIcon }[] = [
   { id: "services", title: "Сервисы", icon: FileText },
   { id: "map", title: "Кампус", icon: Map },
   { id: "calendar", title: "Календарь", icon: Bell },
+  { id: "journal", title: "Журнал", icon: UserCheck },
   { id: "profile", title: "Профиль", icon: UserRound },
 ];
 
@@ -133,6 +135,26 @@ function News({ items, newsBase }: { items: DashboardData["news"]; newsBase?: st
       </article>;
     })}</div> : <Empty>Новостей пока нет</Empty>}
   </section>;
+}
+
+function Journal({ data }: { data: JournalData }) {
+  return <div className="content-stack">
+    {data.saved && <p className="notice" role="status">Отметки сохранены</p>}
+    <section className="panel">
+      <div className="section-head">
+        <div className="heading-with-icon"><span className="soft-icon"><UserCheck size={20} /></span>
+          <div><h2>Пары на сегодня</h2><p className="muted">Отметка посещаемости · {countLabel(data.lessons.length, ["пара", "пары", "пар"])}</p></div></div>
+      </div>
+      {!data.lessons.length && <Empty>На сегодня пар нет — отмечать нечего.</Empty>}
+    </section>
+    {data.lessons.map((lesson) => <section className="panel content-stack journal-lesson" key={lesson.id} aria-labelledby={"journal-title-" + lesson.id}>
+      <div>
+        <h3 id={"journal-title-" + lesson.id}>{lesson.title}</h3>
+        <p className="muted">{timeLabel(new Date(lesson.startsAt))} — {timeLabel(new Date(lesson.endsAt))} · Ауд. {lesson.room || "—"} · {lesson.teacher} · {lesson.groupName}</p>
+      </div>
+      <GroupRoster id={lesson.id} students={lesson.students} showSummary={data.saved && data.savedLessonId === lesson.id} />
+    </section>)}
+  </div>;
 }
 
 function Grades({ grades }: { grades: DashboardData["grades"] }) {
@@ -260,28 +282,27 @@ function Services({ demo, requests }: { demo: boolean; requests: DashboardData["
   </div>;
 }
 
-export function Dashboard({ tab, day, data, role, name, monitor = false, streak, demo = false, initialRoom }: {
-  tab: Tab; day: string; data: DashboardData; role: "STUDENT" | "STAFF"; name: string; monitor?: boolean; streak?: { count: number; waiting: boolean }; demo?: boolean; initialRoom?: string;
+export function Dashboard({ tab, day, data, role, name, monitor = false, streak, demo = false, initialRoom, journal }: {
+  tab: Tab; day: string; data: DashboardData; role: "STUDENT" | "STAFF"; name: string; monitor?: boolean; streak?: { count: number; waiting: boolean }; demo?: boolean; initialRoom?: string; journal?: JournalData;
 }) {
   const [menu, setMenu] = useState(false);
   const [selectedDay, setSelectedDay] = useState("");
   const base = demo ? "/demo/" : "/cabinet/";
-  // Журнал старосты — в общем меню (слева на десктопе, внизу на мобильном),
-  // перед «Профилем», только для назначенного старосты.
-  type NavItem = { id: Tab | "journal"; title: string; icon: LucideIcon };
-  const navItems: NavItem[] = navigation.filter((item) => !(demo && item.id === "profile"));
-  if (monitor && !demo) {
-    const profileIndex = navItems.findIndex((item) => item.id === "profile");
-    navItems.splice(profileIndex < 0 ? navItems.length : profileIndex, 0, { id: "journal", title: "Журнал", icon: UserCheck });
-  }
+  // Журнал старосты — полноценная вкладка кабинета (в меню слева на десктопе
+  // и в нижнем меню на телефоне), только для назначенного старосты.
+  const navItems = navigation.filter((item) => {
+    if (item.id === "journal") return monitor && !demo;
+    if (demo && item.id === "profile") return false;
+    return true;
+  });
   const nav = (className: string) => <nav className={className} aria-label="Основные разделы">
-    {navItems.map(({ id, title, icon: Icon }) => <Link key={id} href={id === "journal" ? "/attendance" : base + id}
+    {navItems.map(({ id, title, icon: Icon }) => <Link key={id} href={base + id}
       aria-label={id === "journal" ? "Журнал старосты" : undefined}
       aria-current={tab === id ? "page" : undefined}>
       <Icon size={21} /><span>{id === "journal" && className === "side-nav" ? "Журнал старосты" : title}</span>
     </Link>)}
   </nav>;
-  const title = { today: "Сегодня", grades: "Успеваемость", services: "Сервисы деканата", map: "Карта кампуса", calendar: "Календарь дедлайнов", profile: "Профиль" }[tab];
+  const title = { today: "Сегодня", grades: "Успеваемость", services: "Сервисы деканата", map: "Карта кампуса", calendar: "Календарь дедлайнов", journal: "Журнал старосты", profile: "Профиль" }[tab];
 
   return <div className="app-shell">
     <aside className="sidebar">
@@ -330,6 +351,7 @@ export function Dashboard({ tab, day, data, role, name, monitor = false, streak,
         <News items={data.news} newsBase={demo ? undefined : "/cabinet/news/"} />
       </div>}
       {tab === "grades" && <Grades grades={data.grades} />}
+      {tab === "journal" && journal && <Journal data={journal} />}
       {tab === "profile" && <ProfileView />}
       {tab === "services" && <Services requests={data.requests} demo={demo} />}
       {tab === "map" && <Campus key={initialRoom ?? "campus"} lessons={data.lessons} initialRoom={initialRoom} />}

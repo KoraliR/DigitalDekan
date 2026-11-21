@@ -1,15 +1,54 @@
 import { attendanceStreak } from "@/lib/campus-tools";
+import { displayStudent } from "@/lib/campus-tools";
 import { Dashboard } from "@/components/dashboard";
+import { forbidden } from "next/navigation";
 import { account } from "@/lib/access";
 import { db } from "@/lib/db";
-import { campusDay, type LessonView } from "@/lib/model";
+import { campusDay, type JournalData, type LessonView } from "@/lib/model";
 import { studentNewsAudiences } from "@/lib/news";
 import { validTab } from "@/lib/tabs";
 
-export default async function Cabinet({ params, searchParams }: { params: Promise<{ tab: string }>; searchParams: Promise<{ room?: string | string[] }> }) {
+export default async function Cabinet({ params, searchParams }: { params: Promise<{ tab: string }>; searchParams: Promise<{ room?: string | string[]; saved?: string; lesson?: string }> }) {
   const user = await account("STUDENT");
   const tab = validTab((await params).tab);
-  const { room } = await searchParams;
+  const { room, saved, lesson: savedLesson } = await searchParams;
+  // Журнал — только для назначенного старосты и только с сегодняшними парами.
+  if (tab === "journal" && !user.isMonitor) forbidden();
+  let journal: JournalData | undefined;
+  if (tab === "journal") {
+    if (!user.groupId) {
+      journal = { lessons: [], saved: false, savedLessonId: null };
+    } else {
+      const dayStart = new Date(campusDay(new Date()) + "T00:00:00+03:00");
+      const dayEnd = new Date(+dayStart + 86400000);
+      const [journalLessons, journalStudents] = await Promise.all([
+        db.groupLesson.findMany({
+          where: { groupId: user.groupId, startsAt: { gte: dayStart, lt: dayEnd } },
+          orderBy: { startsAt: "asc" },
+          include: { group: { select: { name: true } }, marks: true },
+        }),
+        db.user.findMany({
+          where: { role: "STUDENT", studentProfile: { groupId: user.groupId } },
+          orderBy: { name: "asc" },
+          select: { id: true, name: true, studentProfile: { select: { surnameStress: true } } },
+        }),
+      ]);
+      journal = {
+        lessons: journalLessons.map((item) => ({
+          id: item.id, title: item.title, teacher: item.teacher, room: item.room, type: item.type,
+          groupName: item.group.name,
+          startsAt: item.startsAt.toISOString(), endsAt: item.endsAt.toISOString(),
+          students: journalStudents.map((student) => ({
+            id: student.id,
+            name: displayStudent(student.name, student.studentProfile?.surnameStress),
+            status: item.marks.find((mark) => mark.userId === student.id)?.status ?? null,
+          })),
+        })),
+        saved: saved === "1",
+        savedLessonId: typeof savedLesson === "string" ? savedLesson : null,
+      };
+    }
+  }
   // Новости видны только подходящей аудитории: общие, своей группе/факультету/курсу
   // и объявления сотрудников, закреплённых за этой группой.
   const group = tab === "today" && user.groupId
@@ -62,7 +101,7 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
     endsAt: lesson.endsAt.toISOString(),
   }));
 
-  return <Dashboard streak={streak} monitor={user.isMonitor} initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} data={{
+  return <Dashboard streak={streak} monitor={user.isMonitor} initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} journal={journal} data={{
     lessons: [...ownLessons, ...sharedLessons].sort((left, right) => +new Date(left.startsAt) - +new Date(right.startsAt)),
     grades: grades.map(({ userId, ...grade }) => grade),
         deadlines: [

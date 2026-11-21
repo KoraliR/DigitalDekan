@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-export const tabs = ["today", "grades", "services", "map", "calendar", "profile"] as const;
+export const tabs = ["today", "grades", "services", "map", "calendar", "journal", "profile"] as const;
 export type Tab = typeof tabs[number];
 export function validTab(value: string): Tab {
   const tab = tabs.find((item) => item === value);
