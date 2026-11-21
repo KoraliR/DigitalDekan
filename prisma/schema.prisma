@@ -46,6 +46,11 @@ enum Funding {
   CONTRACT
 }
 
+enum Gender {
+  MALE
+  FEMALE
+}
+
 enum AssessmentType {
   EXAM
   TEST
@@ -238,6 +243,7 @@ model AuditEntry {
 model StudentProfile {
   surnameStress Int?
   isMonitor     Boolean     @default(false)
+  gender        Gender?
   userId        String      @id
   user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   groupId       String?

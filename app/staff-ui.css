@@ -72,3 +72,107 @@
   .deadline-roster .grade-register-student { grid-template-columns: minmax(0, 1fr) auto; }
   .deadline-state { grid-column: 1 / -1; justify-self: start; }
 }
+
+/* --- Фон служебного кабинета: тёплые пятна, сетка и мягкий свет --- */
+.staff-bg {
+  position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+  background:
+    radial-gradient(58% 42% at 6% -6%, #ffe7d4 0%, #ffe7d400 70%),
+    radial-gradient(46% 38% at 102% -4%, #ffd7bb 0%, #ffd7bb00 66%),
+    radial-gradient(52% 46% at 88% 104%, #ffe9d9 0%, #ffe9d900 70%),
+    linear-gradient(180deg, #fbf4ed 0%, var(--bg) 46%);
+}
+.staff-bg::after {
+  content: ""; position: absolute; inset: 0; opacity: .36;
+  background-image: radial-gradient(#ddc4af 1px, transparent 1.15px);
+  background-size: 22px 22px;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #0007 55%, transparent 86%);
+  mask-image: linear-gradient(180deg, #000 0%, #0007 55%, transparent 86%);
+}
+.staff-bg-glow { position: absolute; border-radius: 50%; filter: blur(54px); opacity: .55; }
+.staff-bg-glow-a { top: -130px; left: -90px; width: 370px; height: 370px; background: #ffcda3; }
+.staff-bg-glow-b { top: 120px; right: -140px; width: 430px; height: 430px; background: #ffd4b4; }
+.staff-bg-glow-c { bottom: -170px; left: 32%; width: 390px; height: 390px; background: #ffe2cc; }
+[data-theme="dark"] .staff-bg {
+  background:
+    radial-gradient(58% 42% at 6% -6%, #3b2419 0%, #3b241900 70%),
+    radial-gradient(46% 38% at 102% -4%, #332016 0%, #33201600 66%),
+    radial-gradient(52% 46% at 88% 104%, #35221b 0%, #35221b00 70%),
+    linear-gradient(180deg, #1c1714 0%, var(--bg) 46%);
+}
+[data-theme="dark"] .staff-bg::after { background-image: radial-gradient(#3b2e27 1px, transparent 1.15px); opacity: .42; }
+[data-theme="dark"] .staff-bg-glow { opacity: .3; filter: blur(64px); }
+
+/* --- Верхняя строка и hero кабинета --- */
+.staff-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.staff-who { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 750; }
+.staff-who-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--tint); flex: none; }
+
+.staff-hero {
+  isolation: isolate; position: relative; overflow: hidden;
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(104px, 13vw, 152px);
+  align-items: center; gap: 16px; padding: 20px 22px;
+  border-radius: 20px; color: #fff8f1;
+  background: linear-gradient(112deg, #3d2117 0%, #5f2f1b 48%, #94491f 100%);
+  box-shadow: 0 18px 40px #4a1f0d1f, inset 0 1px 0 #ffd9c01f;
+}
+.staff-hero::before {
+  content: ""; position: absolute; z-index: 0; right: 5%; top: -42%;
+  width: min(48vw, 360px); aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle, #ffa35c4d 0%, #ffa35c00 68%);
+}
+.staff-hero::after {
+  content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image: radial-gradient(#ffd9c02b 1px, transparent 1.15px); background-size: 17px 17px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 24%, #000 100%);
+  mask-image: linear-gradient(90deg, transparent 24%, #000 100%);
+}
+.staff-hero-copy { position: relative; z-index: 1; min-width: 0; }
+.staff-hero-eyebrow { color: #ffcfa9; font-size: 11px; font-weight: 850; letter-spacing: .13em; text-transform: uppercase; margin-bottom: 7px; }
+.staff-hero h1 { color: #fffaf4; font-size: clamp(25px, 3.4vw, 39px); letter-spacing: -.055em; }
+.staff-hero-sub { color: #ffdcc7; margin-top: 7px; font-size: 12.5px; font-weight: 650; }
+.staff-hero-art { position: relative; z-index: 1; width: 100%; aspect-ratio: 1; }
+.staff-hero-ring { position: absolute; border: 1px solid #ffc8a040; border-radius: 50%; }
+.staff-hero-ring-one { inset: -3%; }
+.staff-hero-ring-two { inset: 15%; background: #ff7b3914; }
+
+/* --- Сова-преподаватель --- */
+.staff-owl { display: block; width: 100%; height: 100%; overflow: visible; }
+.owl-float { transform-box: fill-box; animation: owl-float 7s ease-in-out infinite; }
+.owl-eyes { transform-box: fill-box; transform-origin: center; animation: owl-blink 6.6s ease-in-out infinite; }
+.owl-tuft { transform-box: fill-box; transform-origin: 50% 100%; }
+.owl-tuft-left { animation: owl-tuft-left 6.4s ease-in-out infinite; }
+.owl-tuft-right { animation: owl-tuft-right 6.4s ease-in-out infinite; }
+.owl-pointer { transform-box: view-box; transform-origin: 150px 138px; animation: owl-pointer 4.6s ease-in-out infinite; }
+@keyframes owl-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes owl-blink { 0%, 90%, 100% { transform: scaleY(1); } 92.5%, 94.5% { transform: scaleY(.08); } }
+@keyframes owl-tuft-left { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-4deg); } }
+@keyframes owl-tuft-right { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(4deg); } }
+@keyframes owl-pointer { 0%, 100% { transform: rotate(0); } 42%, 58% { transform: rotate(-3.5deg); } }
+
+@media (max-width: 719px) {
+  .staff-hero { grid-template-columns: minmax(0, 1fr) 88px; gap: 10px; padding: 16px 16px 18px; border-radius: 16px; }
+  .staff-hero h1 { font-size: 26px; }
+  .staff-hero-sub { font-size: 11.5px; }
+  .staff-hero-ring-two { display: none; }
+  .staff-who { font-size: 11px; }
+}
+@media (max-width: 380px) {
+  .staff-hero { grid-template-columns: minmax(0, 1fr) 74px; }
+  .staff-hero h1 { font-size: 23px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .owl-float, .owl-eyes, .owl-tuft-left, .owl-tuft-right, .owl-pointer { animation: none; }
+}
+
+/* --- Проверка пропуска: тот же фон и сова-преподаватель --- */
+.staff-pass { display: grid; justify-items: center; padding-block: 28px; }
+.staff-pass-card { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 18px; align-items: start; width: min(100%, 720px); padding: 22px; }
+.staff-pass-owl { width: 100%; aspect-ratio: 1; }
+.staff-pass-body { gap: 10px; }
+.staff-pass-body h1 { font-size: clamp(24px, 3.4vw, 34px); }
+.staff-pass-body .notice { width: fit-content; max-width: 100%; }
+@media (max-width: 560px) {
+  .staff-pass-card { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; padding: 16px; }
+  .staff-pass-owl { width: 76px; }
+}

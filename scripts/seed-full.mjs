@@ -219,6 +219,14 @@ function buildNamePool(firsts, lasts) {
 }
 const maleNames = buildNamePool(maleFirst, maleLast);
 const femaleNames = buildNamePool(femaleFirst, femaleLast);
+// Пол студента храним явно: от него зависит эмблема кабинета. Для сохранённых
+// аккаунтов определяем по первому имени из тех же списков.
+const genderOf = (name) => {
+  const first = name.split(" ")[0];
+  if (femaleFirst.includes(first)) return "FEMALE";
+  if (maleFirst.includes(first)) return "MALE";
+  return null;
+};
 let maleCursor = 0;
 let femaleCursor = 0;
 function uniqueStudentName() {
@@ -227,7 +235,7 @@ function uniqueStudentName() {
     const name = female ? femaleNames[femaleCursor++] : maleNames[maleCursor++];
     if (name && !usedNames.has(name)) {
       usedNames.add(name);
-      return name;
+      return { name, gender: female ? "FEMALE" : "MALE" };
     }
   }
   throw new Error("Не удалось подобрать уникальное ФИО студента — расширьте списки имён и фамилий.");
@@ -257,6 +265,7 @@ for (const person of preservedStudents) {
     studentId: person.studentId,
     monitor: Boolean(person.monitor),
     funding: person.funding ?? "BUDGET",
+    gender: genderOf(person.name),
   };
   students.push(student);
   groupMembers.get(group.name).push(student);
@@ -268,12 +277,13 @@ for (const group of groups) {
   while (groupMembers.get(group.name).length < groupSize(group.name)) {
     const login = "student" + loginCounter;
     loginCounter += 1;
-    const name = uniqueStudentName();
+    const { name, gender } = uniqueStudentName();
     const admissionYear = group.name.split("-")[1];
     const student = {
       login,
       name,
       group,
+      gender,
       stress: null,
       studentId: "З-" + admissionYear + "-" + String(100000 + students.length * 13).padStart(6, "0"),
       monitor: false,
@@ -443,6 +453,7 @@ try {
       messengerUrl: student.messengerUrl,
       surnameStress: student.stress,
       isMonitor: student.monitor,
+      gender: student.gender,
     };
   });
   await insertMany("studentProfile", studentProfiles, 200);

@@ -84,3 +84,53 @@
 .journal-lesson h3 { font-size: 15px; }
 .journal-lesson > div > p { margin-top: 3px; }
 .journal-lesson .grade-register { margin-top: 4px; }
+
+/* --- Эмблема кабинета: объёмный смайлик в шапочке магистра --- */
+.mascot, .banner-mascot { display: block; overflow: visible; }
+.banner-mascot { width: 100%; height: 100%; }
+.mascot-float { transform-box: fill-box; animation: mascot-float 7s ease-in-out infinite; }
+.mascot-eyes { transform-box: fill-box; transform-origin: center; animation: mascot-blink 7.4s ease-in-out infinite; }
+.mascot-tassel { transform-box: view-box; transform-origin: 148px 62px; animation: mascot-swing 5.6s ease-in-out infinite; }
+@keyframes mascot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes mascot-blink { 0%, 91%, 100% { transform: scaleY(1); } 93%, 95% { transform: scaleY(.08); } }
+@keyframes mascot-swing { 0%, 100% { transform: rotate(-3.5deg); } 50% { transform: rotate(4.5deg); } }
+
+/* --- Мотивация: фраза, которая меняется при каждом заходе --- */
+.motivation { display: grid; gap: 7px; margin-bottom: 14px; padding: 12px 14px; background: linear-gradient(103deg, var(--tint) 0%, var(--surface) 60%); }
+.motivation-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.motivation-tag { display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 4px 8px; border-radius: 999px; background: #ffffff73; color: var(--accent-ink); font-size: 10px; font-weight: 850; letter-spacing: .06em; text-transform: uppercase; }
+.motivation-tag svg { color: var(--accent); }
+[data-theme="dark"] .motivation-tag { background: #00000038; }
+.motivation-next { display: inline-flex; align-items: center; gap: 5px; min-height: 27px; padding: 3px 8px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--accent-ink); font-size: 11px; font-weight: 800; flex: none; }
+.motivation-next:hover { border-color: var(--line); background: var(--surface); }
+.motivation-quote { margin: 0; }
+.motivation-text { font-size: 15px; font-weight: 750; line-height: 1.42; letter-spacing: -.012em; text-wrap: balance; animation: motivation-in .34s ease both; }
+.motivation-author { margin-top: 5px; color: var(--muted); font-size: 11.5px; font-weight: 700; line-height: 1.4; }
+.motivation-author cite { color: var(--accent-ink); font-style: normal; font-weight: 800; }
+@keyframes motivation-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* --- Серия посещений: огонёк горит, пока идут отметки --- */
+.streak { display: grid; gap: 9px; align-content: start; }
+.streak-head { display: flex; align-items: center; gap: 10px; }
+.streak-title { min-width: 0; margin-right: auto; }
+.streak-title h2 { font-size: 15px; }
+.streak-flame { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: var(--soft); box-shadow: inset 0 1px 0 #ffffff80; flex: none; }
+.streak.is-hot .streak-flame { background: radial-gradient(circle at 50% 62%, #fff3e2, #ffdcbd); box-shadow: inset 0 0 0 1px #ffd0ac80, 0 4px 12px #f6612626; }
+[data-theme="dark"] .streak.is-hot .streak-flame { background: radial-gradient(circle at 50% 62%, #4a2a1b, #33201a); box-shadow: inset 0 0 0 1px #ff9c6a40; }
+.streak-flame-svg { width: 32px; height: 32px; display: block; filter: drop-shadow(0 1px 1px #a33a0e40); }
+.streak:not(.is-hot) .streak-flame-svg { filter: none; }
+.streak-flame-svg.is-active { transform-origin: 50% 88%; animation: streak-flicker 3.4s ease-in-out infinite; }
+@keyframes streak-flicker { 0%, 100% { transform: scale(1) rotate(0); } 38% { transform: scale(1.045) rotate(-1.6deg); } 72% { transform: scale(.975) rotate(1.2deg); } }
+.streak-count { display: grid; justify-items: end; gap: 1px; flex: none; }
+.streak-count strong { color: var(--accent-ink); font-size: 27px; font-weight: 850; letter-spacing: -.05em; line-height: 1; }
+.streak:not(.is-hot) .streak-count strong { color: var(--muted); }
+.streak-count span { color: var(--muted); font-size: 10px; font-weight: 750; white-space: nowrap; }
+.streak-waiting { padding: 7px 9px; border-radius: 8px; background: var(--warn); color: var(--warn-ink); font-size: 11px; font-weight: 750; line-height: 1.4; }
+
+@media (min-width: 720px) {
+  .motivation { padding: 14px 18px; }
+  .motivation-text { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-float, .mascot-eyes, .mascot-tassel, .streak-flame-svg.is-active, .motivation-text { animation: none; }
+}

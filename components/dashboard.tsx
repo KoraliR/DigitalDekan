@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
-  ArrowDownRight, ArrowRight, ArrowUpRight, Bell, CalendarDays, CalendarPlus, CheckCheck, ChevronDown, ChevronLeft, ChevronRight,
+  ArrowDownRight, ArrowRight, Bell, CalendarDays, CalendarPlus, CheckCheck, ChevronDown, ChevronLeft, ChevronRight,
   CircleHelp, Clock3, Coffee, FileText, GraduationCap, Info, LogOut, Map, MapPin, Megaphone, Menu,
   Route, Shield, UserCheck, UserRound, X, type LucideIcon,
 } from "lucide-react";
@@ -14,6 +14,11 @@ import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/theme";
 import { ScanAttendance } from "@/components/scan-attendance";
+import { Mascot } from "@/components/mascot";
+import { QuoteCard } from "@/components/quote-card";
+import { StreakFlame } from "@/components/streak-flame";
+import type { StudentGender } from "@/lib/gender";
+import type { MotivationQuote } from "@/lib/quotes";
 import { GradeBreakdown } from "./grade-breakdown";
 import { Campus } from "./campus";
 import { DeadlineCalendar, SchedulePicker } from "./calendar";
@@ -42,6 +47,10 @@ const lessonForms: Record<string, string> = { one: "занятие", few: "за�
 function countLabel(count: number, forms: [string, string, string]) {
   const rule = new Intl.PluralRules("ru").select(count);
   return count + " " + forms[rule === "one" ? 0 : rule === "few" ? 1 : 2];
+}
+function wordForm(count: number, forms: [string, string, string]) {
+  const rule = new Intl.PluralRules("ru").select(count);
+  return forms[rule === "one" ? 0 : rule === "few" ? 1 : 2];
 }
 
 function Schedule({ day, lessons, deadlines, mapUrl, icsUrl }: { day: string; lessons: DashboardData["lessons"]; deadlines: DashboardData["deadlines"]; mapUrl: string; icsUrl?: string }) {
@@ -282,8 +291,8 @@ function Services({ demo, requests }: { demo: boolean; requests: DashboardData["
   </div>;
 }
 
-export function Dashboard({ tab, day, data, role, name, monitor = false, streak, demo = false, initialRoom, journal }: {
-  tab: Tab; day: string; data: DashboardData; role: "STUDENT" | "STAFF"; name: string; monitor?: boolean; streak?: { count: number; waiting: boolean }; demo?: boolean; initialRoom?: string; journal?: JournalData;
+export function Dashboard({ tab, day, data, role, name, monitor = false, streak, demo = false, initialRoom, journal, quote, gender }: {
+  tab: Tab; day: string; data: DashboardData; role: "STUDENT" | "STAFF"; name: string; monitor?: boolean; streak?: { count: number; waiting: boolean }; demo?: boolean; initialRoom?: string; journal?: JournalData; quote?: MotivationQuote; gender?: StudentGender | null;
 }) {
   const [menu, setMenu] = useState(false);
   const [selectedDay, setSelectedDay] = useState("");
@@ -325,13 +334,16 @@ export function Dashboard({ tab, day, data, role, name, monitor = false, streak,
     <main className="workspace">
       <div className="notice"><Info size={16} /><span>Концепт для конкурса. Не является официальным сервисом вуза</span></div>
       {tab === "today" ? <section className="today-banner">
-        <div className="banner-content"><p><CalendarDays size={16} /> <span className="banner-date">{dateLabel(plusDays(day, 0), true)}</span></p><h1>Сегодня</h1><div>Расписание занятий и ближайшие дедлайны</div></div>
-        <div className="banner-art" aria-hidden="true"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbit orbit-three" /><div className="banner-icon"><CalendarDays size={68} strokeWidth={1.3} /></div><span className="art-arrow"><ArrowUpRight size={22} /></span></div>
+        <div className="banner-content"><p><CalendarDays size={16} /> <span className="banner-date">{dateLabel(plusDays(day, 0), true)}</span></p><h1>Сегодня</h1><p className="banner-sub">Расписание занятий и ближайшие дедлайны</p></div>
+        <div className="banner-art" aria-hidden="true"><div className="orbit orbit-one" /><div className="orbit orbit-two" /><div className="orbit orbit-three" /><Mascot className="banner-mascot" idPrefix="cabinet-mascot" variant={gender === "FEMALE" ? "female" : "male"} /></div>
       </section> : <div className="page-heading"><h1>{title}</h1></div>}
+      {tab === "today" && quote && <QuoteCard initial={quote} />}
       {!demo && (tab === "services" || tab === "profile" || tab === "today") && <div className="campus-shortcuts">
-        {tab === "today" && streak && <section className="panel">
-          <h2>Серия посещений</h2><strong>Дней подряд: {streak.count}</strong>
-          {streak.waiting && <p className="muted">Серия ждёт отметок за ближайший незакрытый день.</p>}
+        {tab === "today" && streak && <section className={"panel streak" + (streak.count > 0 ? " is-hot" : "")}>
+          <div className="streak-head"><span className="streak-flame"><StreakFlame active={streak.count > 0} /></span>
+            <div className="streak-title"><h2>Серия посещений</h2><p className="muted">{streak.count > 0 ? "Огонёк горит" : "Отметься на паре"}</p></div>
+            <p className="streak-count"><strong>{streak.count}</strong><span>{wordForm(streak.count, ["день подряд", "дня подряд", "дней подряд"])}</span></p></div>
+          {streak.waiting && <p className="streak-waiting">Серия ждёт отметок за ближайший незакрытый день.</p>}
         </section>}
         {tab === "today" && <Link className="panel route-link" href="/campus-tools"><div><h2>Сервисы</h2><p className="muted">Пересдачи, консультации, библиотека и объявления</p></div><ArrowRight size={18} /></Link>}
         {tab === "services" && <Link className="panel route-link" href="/campus-tools"><div><h2>Сервисы</h2><p className="muted">Пересдачи, консультации, бронирование, библиотека и объявления</p></div><ArrowRight size={18} /></Link>}

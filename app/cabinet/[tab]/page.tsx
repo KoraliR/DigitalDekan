@@ -5,6 +5,7 @@ import { forbidden } from "next/navigation";
 import { account } from "@/lib/access";
 import { db } from "@/lib/db";
 import { campusDay, type JournalData, type LessonView } from "@/lib/model";
+import { randomQuote } from "@/lib/quotes";
 import { studentNewsAudiences } from "@/lib/news";
 import { validTab } from "@/lib/tabs";
 
@@ -101,7 +102,7 @@ export default async function Cabinet({ params, searchParams }: { params: Promis
     endsAt: lesson.endsAt.toISOString(),
   }));
 
-  return <Dashboard streak={streak} monitor={user.isMonitor} initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} journal={journal} data={{
+  return <Dashboard streak={streak} monitor={user.isMonitor} quote={tab === "today" ? randomQuote() : undefined} gender={user.gender} initialRoom={typeof room === "string" ? room : undefined} tab={tab} day={campusDay(new Date())} role={user.role} name={user.name} journal={journal} data={{
     lessons: [...ownLessons, ...sharedLessons].sort((left, right) => +new Date(left.startsAt) - +new Date(right.startsAt)),
     grades: grades.map(({ userId, ...grade }) => grade),
         deadlines: [

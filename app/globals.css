@@ -46,15 +46,16 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
 .workspace { max-width: 1320px; margin-inline: auto; padding: 16px 14px calc(86px + env(safe-area-inset-bottom)); }
 .notice { width: fit-content; max-width: 100%; display: flex; align-items: center; gap: 8px; background: var(--tint); color: var(--accent-ink); border-radius: 9px; padding: 8px 11px; font-size: 11px; font-weight: 750; line-height: 1.4; }
 .notice svg { flex: none; }
-.today-banner { isolation: isolate; position: relative; overflow: hidden; display: flex; align-items: center; min-height: 147px; margin: 14px 0; padding: 19px 16px; border-radius: 17px; color: #fffaf4; background: linear-gradient(107deg, #50261c 0%, #78351f 52%, #b84e23 100%); box-shadow: var(--shadow); }
-.banner-content { position: relative; z-index: 1; }
-.banner-content p { display: flex; align-items: center; gap: 7px; color: #ffddc6; font-size: 12px; font-weight: 750; margin-bottom: 9px; }
-.banner-content div { color: #ffe2d3; margin-top: 8px; font-size: 12px; }
-.banner-art { position: absolute; left: 68%; top: 50%; width: 250px; height: 250px; transform: translate(-7%, -50%); opacity: .37; }
-.orbit { position: absolute; inset: 0; border: 1px solid #ffc4a45c; border-radius: 50%; }
-.orbit-two { inset: 24px; }.orbit-three { inset: 49px; background: #ff7b3920; }
-.banner-icon { position: absolute; inset: 76px; display: grid; place-items: center; border: 1px solid #ffc4a47d; border-radius: 25px; background: linear-gradient(120deg,#f08648,#d3491e); transform: rotate(-12deg); box-shadow: 0 16px 35px #54200065; color: #ffdfc6; }
-.art-arrow { position: absolute; top: 53px; right: 43px; border: 1px solid #ffdbba69; border-radius: 50%; width: 35px; height: 35px; display: grid; place-items: center; background: #ad4829; }
+.today-banner { isolation: isolate; position: relative; overflow: hidden; display: grid; grid-template-columns: minmax(0, 1fr) clamp(84px, 26vw, 104px); align-items: center; column-gap: 10px; min-height: 147px; margin: 14px 0; padding: 17px 14px 17px 16px; border-radius: 17px; color: #fffaf4; background: linear-gradient(107deg, #50261c 0%, #78351f 52%, #b84e23 100%); box-shadow: var(--shadow); }
+.today-banner::after { content: ""; position: absolute; z-index: 0; right: 2%; top: 50%; width: min(56vw, 280px); aspect-ratio: 1; transform: translateY(-50%); border-radius: 50%; background: radial-gradient(circle, #ff9a5a3d, #ff9a5a00 68%); pointer-events: none; }
+.banner-content { position: relative; z-index: 1; min-width: 0; }
+.banner-content > p { display: flex; align-items: center; gap: 7px; color: #ffddc6; font-size: 12px; font-weight: 750; margin-bottom: 9px; }
+.banner-content > p svg { flex: none; }
+.banner-sub { color: #ffe2d3; margin-top: 8px; font-size: 12px; }
+.banner-art { position: relative; z-index: 1; width: 100%; aspect-ratio: 1; }
+.banner-art::before { content: ""; position: absolute; inset: -12%; border-radius: 50%; background: radial-gradient(circle, #ffb58333, #ffb58300 66%); }
+.orbit { display: none; position: absolute; inset: 0; border: 1px solid #ffc4a445; border-radius: 50%; }
+.orbit-two { inset: 11px; }.orbit-three { inset: 22px; background: #ff7b3914; }
 .page-heading { margin: 21px 0 17px; }
 .dashboard-grid, .content-stack { display: grid; gap: 13px; align-items: start; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 15px; box-shadow: var(--shadow); padding: 15px; min-width: 0; }
@@ -152,8 +153,8 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
 @media (min-width: 720px) {
   .workspace { padding: 22px 24px 90px; }
   .dashboard-grid { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); }
-  .today-banner { padding: 25px; }
-  .banner-art { opacity: 1; }
+  .today-banner { grid-template-columns: minmax(0, 1fr) clamp(140px, 14vw, 182px); column-gap: 26px; padding: 22px 26px; }
+  .orbit { display: block; }
 }
 @media (min-width: 1000px) {
   .app-shell { display: grid; grid-template-columns: 231px minmax(0,1fr); }
@@ -172,7 +173,6 @@ h3 { font-size: 14px; font-weight: 800; line-height: 1.4; }
   .breadcrumb strong { color: var(--ink); }
   .workspace { padding: 25px 29px 35px; }
   .today-banner { min-height: 177px; margin: 15px 0; padding-inline: 29px; }
-  .banner-art { left: auto; right: 58px; }
   .panel { padding: 19px; }
   .dashboard-grid, .content-stack { gap: 16px; }
   .lesson { padding: 11px 12px; }
