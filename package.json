@@ -11,9 +11,12 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:deploy": "prisma migrate deploy",
-    "db:user": "node --env-file=.env scripts/create-user.mjs",
-    "db:seed": "node --env-file=.env scripts/seed-demo.mjs",
-    "db:demo": "node --env-file=.env scripts/create-demo.mjs"
+    "db:user": "node --env-file-if-exists=.env scripts/create-user.mjs",
+    "db:password": "node --env-file-if-exists=.env scripts/set-password.mjs",
+    "db:seed": "node --env-file-if-exists=.env scripts/seed-full.mjs",
+    "db:seed-demo": "node --env-file-if-exists=.env scripts/seed-demo.mjs",
+    "db:accounts": "node --env-file-if-exists=.env scripts/export-accounts.mjs",
+    "db:demo": "node --env-file-if-exists=.env scripts/create-demo.mjs"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5",
